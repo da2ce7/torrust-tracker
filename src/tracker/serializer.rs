@@ -26,7 +26,9 @@ mod tests {
         pub time: Instant,
     }
 
+    // todo: this test is unstable and should be reworked.
     #[test]
+    #[ignore = "Unstable Test"]
     fn instant_types_can_be_serialized_as_elapsed_time_since_that_instant_in_milliseconds() {
 
         use std::{thread, time};

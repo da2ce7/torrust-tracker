@@ -1,4 +1,5 @@
 use std::str::FromStr;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use log::debug;
@@ -84,7 +85,7 @@ impl Database for SqliteDatabase {
 
             Ok(AuthKey {
                 key,
-                valid_until: Some(valid_until as u64)
+                valid_until: Some(Duration::new(valid_until as u64,0))
             })
         })?;
 
@@ -182,7 +183,7 @@ impl Database for SqliteDatabase {
 
             Ok(AuthKey {
                 key,
-                valid_until: Some(valid_until_i64 as u64),
+                valid_until: Some(Duration::new(valid_until_i64 as u64,0)),
             })
         } else {
             Err(database::Error::QueryReturnedNoRows)
@@ -193,7 +194,7 @@ impl Database for SqliteDatabase {
         let conn = self.pool.get().map_err(|_| database::Error::DatabaseError)?;
 
         match conn.execute("INSERT INTO keys (key, valid_until) VALUES (?1, ?2)",
-                           [auth_key.key.to_string(), auth_key.valid_until.unwrap().to_string()],
+                           [auth_key.key.to_string(), auth_key.valid_until.unwrap().as_secs().to_string()],
         ) {
             Ok(updated) => {
                 if updated > 0 { return Ok(updated); }

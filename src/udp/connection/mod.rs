@@ -81,12 +81,6 @@
 //! ```
 //!
 //! From [here](https://github.com/troydm/udpt/blob/master/src/db/driver_sqlite.cpp#L410-L418).
-pub mod secret;
-pub mod client_id;
-pub mod timestamp_32;
-pub mod timestamp_64;
-pub mod cypher;
-pub mod connection_id_issuer;
-pub mod connection_id_data;
-pub mod encrypted_connection_id_data;
-pub mod encoded_connection_id_data;
+
+pub mod client_image;
+pub mod connection_cookie;

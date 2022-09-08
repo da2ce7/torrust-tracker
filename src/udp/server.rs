@@ -6,9 +6,9 @@ use aquatic_udp_protocol::Response;
 use log::{debug, info};
 use tokio::net::UdpSocket;
 
+use crate::keys::{initialize_default_key, initialize_default_secret};
 use crate::tracker::tracker::TorrentTracker;
 use crate::udp::MAX_PACKET_SIZE;
-use crate::udp::connection::secret::Secret;
 use crate::udp::packet_handler::PacketHandler;
 
 pub struct UdpServer {
@@ -27,9 +27,10 @@ impl UdpServer {
     }
 
     pub async fn start(&self) {
-        let encryption_key = Secret::new();
+        initialize_default_key();
+        initialize_default_secret();
 
-        let request_handler = Arc::new(PacketHandler::new(encryption_key));
+        let request_handler = Arc::new(PacketHandler::new());
 
         loop {
             let mut data = [0; MAX_PACKET_SIZE];

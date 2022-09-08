@@ -1,27 +1,25 @@
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
+use std::time::Duration;
 use aquatic_udp_protocol::{AnnounceInterval, AnnounceRequest, AnnounceResponse, ConnectRequest, ConnectResponse, NumberOfDownloads, NumberOfPeers, Port, Request, Response, ResponsePeer, ScrapeRequest, ScrapeResponse, TorrentScrapeStatistics, ConnectionId, ErrorResponse, TransactionId};
 use log::debug;
 use crate::torrent::TorrentError;
-use crate::udp::connection::connection_id_issuer::{EncryptedConnectionIdIssuer, ConnectionIdIssuer};
-use crate::udp::connection::secret::Secret;
+use crate::udp::connection::client_image::{KeyedImage, Create};
+use crate::udp::connection::connection_cookie::{HashedCookie, ConnectionCookie};
 use crate::{InfoHash, MAX_SCRAPE_TORRENTS};
 use crate::peer::TorrentPeer;
 use crate::udp::errors::ServerError;
 use crate::udp::request::AnnounceRequestWrapper;
 use crate::tracker::statistics::TrackerStatisticsEvent;
 use crate::tracker::tracker::TorrentTracker;
-use crate::protocol::clock::current_timestamp;
 
 pub struct PacketHandler {
-    encrypted_connection_id_issuer: EncryptedConnectionIdIssuer,
     // todo: inject also a crate::protocol::Clock in order to make it easier to test it.
 }
 
 impl PacketHandler {
-    pub fn new(secret: Secret) -> Self {
-        let encrypted_connection_id_issuer = EncryptedConnectionIdIssuer::new(secret);
-        Self { encrypted_connection_id_issuer }
+    pub fn new() -> Self {
+        Self {  }
     }
 
     pub async fn handle_packet(&self, remote_addr: SocketAddr, payload: Vec<u8>, tracker: Arc<TorrentTracker>) -> Option<Response> {
@@ -228,22 +226,26 @@ impl PacketHandler {
     }
 
     fn generate_new_connection_id(&self, remote_addr: &SocketAddr) -> ConnectionId {
-        let current_timestamp = current_timestamp();
 
-        let connection_id = self.encrypted_connection_id_issuer.new_connection_id(remote_addr, current_timestamp);
 
-        debug!("new connection id: {:?}, current timestamp: {:?}", connection_id, current_timestamp);
+        let client_image = KeyedImage::new(&remote_addr);
+        let encoded_id = HashedCookie::new(client_image, Duration::new(1, 0));
 
-        connection_id
+        debug!("new connection id: {:?}", encoded_id);
+
+        ConnectionId(i64::from_le_bytes(encoded_id.value().to_owned()))
     }
 
     fn is_connection_id_valid(&self, connection_id: &ConnectionId, remote_addr: &SocketAddr) -> bool {
-        let current_timestamp = current_timestamp();
+        
+        let client_image = KeyedImage::new(&remote_addr);
+        let valid = HashedCookie::check(client_image, Duration::new(1, 0), connection_id.0.to_le_bytes(), None);
 
-        let valid = self.encrypted_connection_id_issuer.is_connection_id_valid(connection_id, remote_addr, current_timestamp);
+        debug!("verify connection id: {:?}, valid: {:?}", connection_id, valid);
 
-        debug!("verify connection id: {:?}, current timestamp: {:?}, valid: {:?}", connection_id, current_timestamp, valid);
-
-        valid
+        match valid {
+            Ok(_) => true,
+            Err(_) => false,
+        }
     }
 }

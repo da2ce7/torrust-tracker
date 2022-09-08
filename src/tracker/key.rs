@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use derive_more::{Display, Error};
 use log::debug;
 use rand::{Rng, thread_rng};
@@ -5,7 +7,7 @@ use rand::distributions::Alphanumeric;
 use serde::Serialize;
 
 use crate::AUTH_KEY_LENGTH;
-use crate::protocol::clock::current_timestamp;
+use crate::protocol::clock::{DefaultClock, Clock};
 
 pub fn generate_auth_key(seconds_valid: u64) -> AuthKey {
     let key: String = thread_rng()
@@ -18,14 +20,14 @@ pub fn generate_auth_key(seconds_valid: u64) -> AuthKey {
 
     AuthKey {
         key,
-        valid_until: Some(current_timestamp() + seconds_valid),
+        valid_until: Some(DefaultClock::after_sec(seconds_valid).0),
     }
 }
 
 pub fn verify_auth_key(auth_key: &AuthKey) -> Result<(), Error> {
-    let current_time = current_timestamp();
+    let current_time = DefaultClock::now();
     if auth_key.valid_until.is_none() { return Err(Error::KeyInvalid); }
-    if auth_key.valid_until.unwrap() < current_time { return Err(Error::KeyExpired); }
+    if auth_key.valid_until.unwrap() <= current_time.0 { return Err(Error::KeyExpired); }
 
     Ok(())
 }
@@ -33,7 +35,7 @@ pub fn verify_auth_key(auth_key: &AuthKey) -> Result<(), Error> {
 #[derive(Serialize, Debug, Eq, PartialEq, Clone)]
 pub struct AuthKey {
     pub key: String,
-    pub valid_until: Option<u64>,
+    pub valid_until: Option<Duration>,
 }
 
 impl AuthKey {
@@ -80,6 +82,8 @@ impl From<r2d2_sqlite::rusqlite::Error> for Error {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use crate::tracker::key;
 
     #[test]
@@ -119,7 +123,7 @@ mod tests {
     #[test]
     fn generate_expired_auth_key() {
         let mut auth_key = key::generate_auth_key(0);
-        auth_key.valid_until = Some(0);
+        auth_key.valid_until = Some(Duration::ZERO);
 
         assert!(key::verify_auth_key(&auth_key).is_err());
     }

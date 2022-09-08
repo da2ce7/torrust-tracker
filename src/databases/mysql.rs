@@ -1,4 +1,5 @@
 use std::str::FromStr;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use log::{debug};
@@ -80,7 +81,7 @@ impl Database for MysqlDatabase {
         let keys: Vec<AuthKey> = conn.query_map("SELECT `key`, valid_until FROM `keys`", |(key, valid_until): (String, i64)| {
             AuthKey {
                 key,
-                valid_until: Some(valid_until as u64)
+                valid_until: Some(Duration::new(valid_until as u64,0))
             }
         }).map_err(|_| database::Error::QueryReturnedNoRows)?;
 
@@ -169,7 +170,7 @@ impl Database for MysqlDatabase {
             Some((key, valid_until)) => {
                 Ok(AuthKey {
                     key,
-                    valid_until: Some(valid_until as u64),
+                    valid_until: Some(Duration::new(valid_until as u64,0)),
                 })
             }
             None => {
@@ -182,7 +183,7 @@ impl Database for MysqlDatabase {
         let mut conn = self.pool.get().map_err(|_| database::Error::DatabaseError)?;
 
         let key = auth_key.key.to_string();
-        let valid_until = auth_key.valid_until.unwrap_or(0).to_string();
+        let valid_until = auth_key.valid_until.unwrap_or(Duration::ZERO).as_secs().to_string();
 
         match conn.exec_drop("INSERT INTO `keys` (`key`, valid_until) VALUES (:key, :valid_until)", params! { key, valid_until }) {
             Ok(_) => {
