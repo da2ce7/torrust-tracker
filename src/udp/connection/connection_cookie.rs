@@ -9,7 +9,7 @@ use cipher::generic_array::GenericArray;
 use cipher::{BlockDecrypt, BlockEncrypt, BlockSizeUser};
 
 use crate::keys::DEFAULT_KEY;
-use crate::protocol::clock::{DefaultClock, Clock};
+use crate::protocol::clock::{DefaultTime, Time};
 
 type BlowfishArray = GenericArray<u8, <Blowfish<LittleEndian> as BlockSizeUser>::BlockSize>;
 
@@ -48,8 +48,8 @@ impl HashedCookie {
         };
         
         let now_maybe_next = match past {
-            true => DefaultClock::after(&after_maybe),
-            false => DefaultClock::after(&(lifetime + after_maybe)),
+            true => DefaultTime::after(&after_maybe),
+            false => DefaultTime::after(&(lifetime + after_maybe)),
         };
 
         let life_period =  now_maybe_next / lifetime.into();
@@ -97,7 +97,7 @@ impl ConnectionCookie<KeyedImage> for WitnessCookie {
     type Error = &'static str;
 
     fn new(client_image: KeyedImage, lifetime: Duration) -> Self {
-        let expiry_u32: u32 = DefaultClock::after(&lifetime).try_into().unwrap();
+        let expiry_u32: u32 = DefaultTime::after(&lifetime).try_into().unwrap();
 
         let mut hasher = DefaultHasher::default();
         hasher.write_u32(expiry_u32);
@@ -129,7 +129,7 @@ impl ConnectionCookie<KeyedImage> for WitnessCookie {
             None => Duration::ZERO,
         };
 
-        let now_u32 = DefaultClock::after(&after_maybe).try_into().unwrap();
+        let now_u32 = DefaultTime::after(&after_maybe).try_into().unwrap();
 
         if expiry_u32 <= now_u32 {
             return Err("Expired connection id");
@@ -153,7 +153,7 @@ impl ConnectionCookie<PlainImage> for EncryptedCookie {
     type Error = &'static str;
 
     fn new(client_image: PlainImage, lifetime: Duration) -> Self {
-        let expiry_u32: u32 = DefaultClock::after(&lifetime).try_into().unwrap();
+        let expiry_u32: u32 = DefaultTime::after(&lifetime).try_into().unwrap();
 
         let id_clear: Vec<u8> = [&client_image.value()[0..4], &expiry_u32.to_le_bytes().as_slice()].concat();
 
@@ -193,7 +193,7 @@ impl ConnectionCookie<PlainImage> for EncryptedCookie {
             None => Duration::ZERO,
         };
 
-        let now = DefaultClock::after(&after_maybe);
+        let now = DefaultTime::after(&after_maybe);
 
         let expiry = u32::from_le_bytes(expiry_bytes);
 
