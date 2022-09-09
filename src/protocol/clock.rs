@@ -74,9 +74,9 @@ impl<const T: usize> From<u64> for UnixClock<{ T }> {
     }
 }
 
-impl<const T: usize> Into<u64> for UnixClock<{ T }> {
-    fn into(self) -> u64 {
-        self.0.as_secs()
+impl<const T: usize> From<UnixClock<{ T }>> for u64 {
+    fn from(unix_clock: UnixClock<{ T }>) -> Self {
+        unix_clock.0.as_secs()
     }
 }
 
