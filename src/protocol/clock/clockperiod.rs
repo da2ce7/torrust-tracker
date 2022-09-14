@@ -8,37 +8,37 @@ pub trait ClockPeriods<T>: Sized
 where
     T: TimeNow,
 {
-    fn now(length: &period::PeriodLength) -> Option<Result<period::SinceUnixEpochPeriods, TryFromIntError>> {
+    fn now(length: &period::PeriodLength) -> Option<Result<period::PeriodSinceUnixEpoch, TryFromIntError>> {
         T::now().as_nanos().checked_div(length.as_nanos())
             .map(|count| match period::PeriodCount::try_from(count) {
                 Err(error) => Err(error),
-                Ok(count) => Ok(period::SinceUnixEpochPeriods::new(length, &count)),
+                Ok(count) => Ok(period::PeriodSinceUnixEpoch::new(length, &count)),
             })
     }
 
     fn now_add(
         length: &period::PeriodLength,
         add_time: &Duration,
-    ) -> Option<Result<period::SinceUnixEpochPeriods, TryFromIntError>> {
+    ) -> Option<Result<period::PeriodSinceUnixEpoch, TryFromIntError>> {
         match T::add(add_time) {
             None => None,
             Some(time) => time.as_nanos().checked_div(length.as_nanos())
                 .map(|count| match period::PeriodCount::try_from(count) {
                     Err(error) => Err(error),
-                    Ok(count) => Ok(period::SinceUnixEpochPeriods::new(length, &count)),
+                    Ok(count) => Ok(period::PeriodSinceUnixEpoch::new(length, &count)),
                 }),
         }
     }
     fn now_sub(
         length: &period::PeriodLength,
         sub_time: &Duration,
-    ) -> Option<Result<period::SinceUnixEpochPeriods, TryFromIntError>> {
+    ) -> Option<Result<period::PeriodSinceUnixEpoch, TryFromIntError>> {
         match T::sub(sub_time) {
             None => None,
             Some(time) => time.as_nanos().checked_div(length.as_nanos())
                 .map(|count| match period::PeriodCount::try_from(count) {
                     Err(error) => Err(error),
-                    Ok(count) => Ok(period::SinceUnixEpochPeriods::new(length, &count)),
+                    Ok(count) => Ok(period::PeriodSinceUnixEpoch::new(length, &count)),
                 }),
         }
     }
@@ -73,14 +73,14 @@ mod tests {
     fn it_should_get_the_current_period() {
         assert_eq!(
             DefaultPeriodClock::now(&Duration::from_secs(2)).unwrap().unwrap(),
-            Period::from_sec(2, 0)
+            Period::from_secs(2, 0)
         );
 
         DefaultClock::local_set(&DurationSinceUnixEpoch::from_secs(12387687123));
 
         assert_eq!(
             DefaultPeriodClock::now(&Duration::from_secs(2)).unwrap().unwrap(),
-            Period::from_sec(2, 6193843561)
+            Period::from_secs(2, 6193843561)
         );
     }
 }
