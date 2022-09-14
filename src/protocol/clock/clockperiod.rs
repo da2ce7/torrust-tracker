@@ -9,13 +9,11 @@ where
     T: TimeNow,
 {
     fn now(length: &period::PeriodLength) -> Option<Result<period::SinceUnixEpochPeriods, TryFromIntError>> {
-        match T::now().as_nanos().checked_div((*length).as_nanos()) {
-            None => None,
-            Some(count) => Some(match period::PeriodCount::try_from(count) {
+        T::now().as_nanos().checked_div(length.as_nanos())
+            .map(|count| match period::PeriodCount::try_from(count) {
                 Err(error) => Err(error),
-                Ok(count) => Ok(period::SinceUnixEpochPeriods::new(&length, &count)),
-            }),
-        }
+                Ok(count) => Ok(period::SinceUnixEpochPeriods::new(length, &count)),
+            })
     }
 
     fn now_add(
@@ -24,13 +22,11 @@ where
     ) -> Option<Result<period::SinceUnixEpochPeriods, TryFromIntError>> {
         match T::add(add_time) {
             None => None,
-            Some(time) => match time.as_nanos().checked_div(length.as_nanos()) {
-                None => None,
-                Some(count) => Some(match period::PeriodCount::try_from(count) {
+            Some(time) => time.as_nanos().checked_div(length.as_nanos())
+                .map(|count| match period::PeriodCount::try_from(count) {
                     Err(error) => Err(error),
-                    Ok(count) => Ok(period::SinceUnixEpochPeriods::new(&length, &count)),
+                    Ok(count) => Ok(period::SinceUnixEpochPeriods::new(length, &count)),
                 }),
-            },
         }
     }
     fn now_sub(
@@ -39,13 +35,11 @@ where
     ) -> Option<Result<period::SinceUnixEpochPeriods, TryFromIntError>> {
         match T::sub(sub_time) {
             None => None,
-            Some(time) => match time.as_nanos().checked_div(length.as_nanos()) {
-                None => None,
-                Some(count) => Some(match period::PeriodCount::try_from(count) {
+            Some(time) => time.as_nanos().checked_div(length.as_nanos())
+                .map(|count| match period::PeriodCount::try_from(count) {
                     Err(error) => Err(error),
-                    Ok(count) => Ok(period::SinceUnixEpochPeriods::new(&length, &count)),
+                    Ok(count) => Ok(period::SinceUnixEpochPeriods::new(length, &count)),
                 }),
-            },
         }
     }
 }
