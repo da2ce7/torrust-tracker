@@ -65,7 +65,7 @@ pub type DefaultPeriodClock = StoppedPeriodClock;
 mod tests {
     use std::time::Duration;
 
-    use crate::protocol::clock::clock::{DefaultClock, SinceUnixEpoch, StoppedTime};
+    use crate::protocol::clock::clock::{DefaultClock, DurationSinceUnixEpoch, StoppedTime};
     use crate::protocol::clock::clockperiod::{ClockPeriods, DefaultPeriodClock};
     use crate::protocol::clock::period::Period;
 
@@ -76,7 +76,7 @@ mod tests {
             Period::from_sec(2, 0)
         );
 
-        DefaultClock::local_set(&SinceUnixEpoch::from_secs(12387687123));
+        DefaultClock::local_set(&DurationSinceUnixEpoch::from_secs(12387687123));
 
         assert_eq!(
             DefaultPeriodClock::now(&Duration::from_secs(2)).unwrap().unwrap(),
