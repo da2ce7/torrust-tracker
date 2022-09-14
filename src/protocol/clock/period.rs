@@ -31,7 +31,7 @@ impl Period {
     pub const fn from_sec(length: u64, count: u64) -> Self {
         Self {
             length: Duration::from_secs(length),
-            count: count,
+            count,
         }
     }
 }
@@ -49,7 +49,7 @@ impl Periods for Period {
             None => Err(IntErrorKind::PosOverflow),
             Some(count) => Ok(Self {
                 length: self.length,
-                count: count,
+                count,
             }),
         }
     }
@@ -59,7 +59,7 @@ impl Periods for Period {
             None => Err(IntErrorKind::NegOverflow),
             Some(count) => Ok(Self {
                 length: self.length,
-                count: count,
+                count,
             }),
         }
     }
