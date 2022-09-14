@@ -16,15 +16,15 @@ pub struct Period {
 
 impl Period {
     /// Returns a new `Period`.
-    pub fn new(length: &PeriodLength, count: &PeriodCount) -> Self {
+    pub fn new(length: &PeriodLength, count: PeriodCount) -> Self {
         Self {
             length: *length,
-            count: *count,
+            count,
         }
     }
 
     /// Returns a new `Period` from seconds.
-    pub const fn from_secs(seconds: u64, count: u64) -> Self {
+    pub const fn from_secs(seconds: u64, count: PeriodCount) -> Self {
         Self {
             length: Duration::from_secs(seconds),
             count,
