@@ -17,6 +17,8 @@ pub trait PeriodsTotals: Periods {
     fn total_time_end(&self) -> Result<Option<PeriodTotalTime>, TryFromIntError>;
 }
 
+/// A `Period` type with a `length` as `Duration` and a `count` as `u64`,
+/// to represent a time duration and how many times that duration will occur or has occurred.
 #[derive(Debug, Default, Hash, PartialEq)]
 pub struct Period {
     pub length: PeriodLength,
