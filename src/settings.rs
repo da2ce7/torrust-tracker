@@ -79,7 +79,7 @@ impl Settings {
     pub fn new() -> Result<Self, ConfigurationError> {
         let local_source = Path::new(CONFIG_FOLDER).join(CONFIG_LOCAL);
 
-        //Self::migrate_old_config()?;
+        Self::migrate_old_config()?;
 
         let sources = Self::get_sources()?;
         let settings = Self::load(&sources)?;
@@ -184,7 +184,7 @@ impl Settings {
         }
     }
 
-    fn write(&self, destination: &PathBuf) -> Result<(), ConfigurationError> {
+    fn write(&self, destination: &Path) -> Result<(), ConfigurationError> {
         let toml_string = match toml::to_string(self) {
             Ok(s) => s,
             Err(e) => return Err(ConfigurationError::EncodeError { error: e }),

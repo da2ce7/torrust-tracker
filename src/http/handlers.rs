@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::net::IpAddr;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use log::debug;
@@ -53,8 +54,14 @@ pub async fn handle_announce(
 
     debug!("{:?}", announce_request);
 
-    let peer =
-        TorrentPeer::from_http_announce_request(&announce_request, announce_request.peer_addr, tracker.config.get_ext_ip());
+    let peer = TorrentPeer::from_http_announce_request(
+        &announce_request,
+        announce_request.peer_addr,
+        match &tracker.settings.external_ip {
+            Some(ip) => IpAddr::from_str(&ip).map_or(None, |ip| Some(ip)),
+            None => None,
+        },
+    );
     let torrent_stats = tracker
         .update_torrent_with_peer_and_get_stats(&announce_request.info_hash, &peer)
         .await;
@@ -62,7 +69,7 @@ pub async fn handle_announce(
     // get all torrent peers excluding the peer_addr
     let peers = tracker.get_torrent_peers(&announce_request.info_hash, &peer.peer_addr).await;
 
-    let announce_interval = tracker.config.announce_interval;
+    let announce_interval = tracker.settings.announce_interval;
 
     // send stats event
     match announce_request.peer_addr {
@@ -79,7 +86,7 @@ pub async fn handle_announce(
         torrent_stats,
         peers,
         announce_interval,
-        tracker.config.min_announce_interval,
+        tracker.settings.min_announce_interval,
     )
 }
 

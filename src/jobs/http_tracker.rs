@@ -4,7 +4,7 @@ use std::sync::Arc;
 use log::{info, warn};
 use tokio::task::JoinHandle;
 
-use crate::config::HttpTrackerConfig;
+use crate::settings::HttpTrackerConfig;
 use crate::tracker::tracker::TorrentTracker;
 use crate::HttpServer;
 

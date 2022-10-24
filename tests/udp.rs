@@ -17,18 +17,18 @@ mod udp_tracker_server {
     use rand::{thread_rng, Rng};
     use tokio::net::UdpSocket;
     use tokio::task::JoinHandle;
-    use torrust_tracker::config::Configuration;
     use torrust_tracker::jobs::udp_tracker;
+    use torrust_tracker::settings::Settings;
     use torrust_tracker::tracker::statistics::StatsTracker;
     use torrust_tracker::tracker::tracker::TorrentTracker;
     use torrust_tracker::udp::MAX_PACKET_SIZE;
     use torrust_tracker::{logging, static_time};
 
-    fn tracker_configuration() -> Arc<Configuration> {
-        let mut config = Configuration::default();
-        config.log_level = Some("off".to_owned());
-        config.udp_trackers[0].bind_address = format!("127.0.0.1:{}", ephemeral_random_port());
-        Arc::new(config)
+    fn tracker_settings() -> Arc<Settings> {
+        let mut settings = Settings::default().unwrap();
+        settings.log_level = Some("off".to_owned());
+        settings.udp_trackers[0].bind_address = format!("127.0.0.1:{}", ephemeral_random_port());
+        Arc::new(settings)
     }
 
     pub struct UdpServer {
@@ -46,7 +46,7 @@ mod udp_tracker_server {
             }
         }
 
-        pub async fn start(&mut self, configuration: Arc<Configuration>) {
+        pub async fn start(&mut self, settings: Arc<Settings>) {
             if !self.started.load(Ordering::Relaxed) {
                 // Set the time of Torrust app starting
                 lazy_static::initialize(&static_time::TIME_AT_APP_START);
@@ -55,7 +55,7 @@ mod udp_tracker_server {
                 let stats_tracker = StatsTracker::new_active_instance();
 
                 // Initialize Torrust tracker
-                let tracker = match TorrentTracker::new(configuration.clone(), Box::new(stats_tracker)) {
+                let tracker = match TorrentTracker::new(settings.clone(), Box::new(stats_tracker)) {
                     Ok(tracker) => Arc::new(tracker),
                     Err(error) => {
                         panic!("{}", error)
@@ -63,23 +63,23 @@ mod udp_tracker_server {
                 };
 
                 // Initialize logging
-                logging::setup_logging(&configuration);
+                logging::setup_logging(&settings);
 
-                let udp_tracker_config = &configuration.udp_trackers[0];
+                let udp_tracker_settings = &settings.udp_trackers[0];
 
                 // Start the UDP tracker job
-                self.job = Some(udp_tracker::start_job(&udp_tracker_config, tracker.clone()));
+                self.job = Some(udp_tracker::start_job(&udp_tracker_settings, tracker.clone()));
 
-                self.bind_address = Some(udp_tracker_config.bind_address.clone());
+                self.bind_address = Some(udp_tracker_settings.bind_address.clone());
 
                 self.started.store(true, Ordering::Relaxed);
             }
         }
     }
 
-    async fn new_running_udp_server(configuration: Arc<Configuration>) -> UdpServer {
+    async fn new_running_udp_server(settings: Arc<Settings>) -> UdpServer {
         let mut udp_server = UdpServer::new();
-        udp_server.start(configuration).await;
+        udp_server.start(settings).await;
         udp_server
     }
 
@@ -207,9 +207,9 @@ mod udp_tracker_server {
 
     #[tokio::test]
     async fn should_return_a_bad_request_response_when_the_client_sends_an_empty_request() {
-        let configuration = tracker_configuration();
+        let settings = tracker_settings();
 
-        let udp_server = new_running_udp_server(configuration).await;
+        let udp_server = new_running_udp_server(settings).await;
 
         let client = new_connected_udp_client(&udp_server.bind_address.unwrap()).await;
 
@@ -224,9 +224,9 @@ mod udp_tracker_server {
 
     #[tokio::test]
     async fn should_return_a_connect_response_when_the_client_sends_a_connection_request() {
-        let configuration = tracker_configuration();
+        let settings = tracker_settings();
 
-        let udp_server = new_running_udp_server(configuration).await;
+        let udp_server = new_running_udp_server(settings).await;
 
         let client = new_connected_udp_tracker_client(&udp_server.bind_address.unwrap()).await;
 
@@ -256,9 +256,9 @@ mod udp_tracker_server {
 
     #[tokio::test]
     async fn should_return_an_announce_response_when_the_client_sends_an_announce_request() {
-        let configuration = tracker_configuration();
+        let settings = tracker_settings();
 
-        let udp_server = new_running_udp_server(configuration).await;
+        let udp_server = new_running_udp_server(settings).await;
 
         let client = new_connected_udp_tracker_client(&udp_server.bind_address.unwrap()).await;
 
@@ -290,9 +290,9 @@ mod udp_tracker_server {
 
     #[tokio::test]
     async fn should_return_a_scrape_response_when_the_client_sends_a_scrape_request() {
-        let configuration = tracker_configuration();
+        let settings = tracker_settings();
 
-        let udp_server = new_running_udp_server(configuration).await;
+        let udp_server = new_running_udp_server(settings).await;
 
         let client = new_connected_udp_tracker_client(&udp_server.bind_address.unwrap()).await;
 

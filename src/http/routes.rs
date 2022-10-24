@@ -17,7 +17,7 @@ pub fn routes(tracker: Arc<TorrentTracker>) -> impl Filter<Extract = impl warp::
 fn announce(tracker: Arc<TorrentTracker>) -> impl Filter<Extract = impl warp::Reply, Error = Rejection> + Clone {
     warp::path::path("announce")
         .and(warp::filters::method::get())
-        .and(with_announce_request(tracker.config.on_reverse_proxy))
+        .and(with_announce_request(tracker.settings.on_reverse_proxy))
         .and(with_auth_key())
         .and(with_tracker(tracker))
         .and_then(handle_announce)
@@ -27,7 +27,7 @@ fn announce(tracker: Arc<TorrentTracker>) -> impl Filter<Extract = impl warp::Re
 fn scrape(tracker: Arc<TorrentTracker>) -> impl Filter<Extract = impl warp::Reply, Error = Rejection> + Clone {
     warp::path::path("scrape")
         .and(warp::filters::method::get())
-        .and(with_scrape_request(tracker.config.on_reverse_proxy))
+        .and(with_scrape_request(tracker.settings.on_reverse_proxy))
         .and(with_auth_key())
         .and(with_tracker(tracker))
         .and_then(handle_scrape)

@@ -4,11 +4,11 @@ use log::info;
 use tokio::task::JoinHandle;
 
 use crate::api::server;
-use crate::config::Configuration;
+use crate::settings::Settings;
 use crate::tracker::tracker::TorrentTracker;
 
-pub fn start_job(config: &Configuration, tracker: Arc<TorrentTracker>) -> JoinHandle<()> {
-    let bind_addr = config
+pub fn start_job(settings: &Settings, tracker: Arc<TorrentTracker>) -> JoinHandle<()> {
+    let bind_addr = settings
         .http_api
         .bind_address
         .parse::<std::net::SocketAddr>()

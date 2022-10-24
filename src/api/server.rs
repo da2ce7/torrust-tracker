@@ -349,7 +349,7 @@ pub fn start(socket_addr: SocketAddr, tracker: Arc<TorrentTracker>) -> impl warp
             .or(reload_keys),
     );
 
-    let server = api_routes.and(authenticate(tracker.config.http_api.access_tokens.clone()));
+    let server = api_routes.and(authenticate(tracker.settings.http_api.access_tokens.clone()));
 
     let (_addr, api_server) = serve(server).bind_with_graceful_shutdown(socket_addr, async move {
         tokio::signal::ctrl_c().await.expect("Failed to listen to shutdown signal.");

@@ -6,7 +6,6 @@ pub use udp::server::*;
 pub use self::tracker::*;
 
 pub mod api;
-pub mod config;
 pub mod databases;
 pub mod http;
 pub mod jobs;

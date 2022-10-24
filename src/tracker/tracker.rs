@@ -7,19 +7,19 @@ use std::time::Duration;
 use tokio::sync::mpsc::error::SendError;
 use tokio::sync::{RwLock, RwLockReadGuard};
 
-use crate::config::Configuration;
 use crate::databases::database;
 use crate::databases::database::Database;
 use crate::mode::TrackerMode;
 use crate::peer::TorrentPeer;
 use crate::protocol::common::InfoHash;
+use crate::settings::Settings;
 use crate::statistics::{TrackerStatistics, TrackerStatisticsEvent, TrackerStatsService};
 use crate::tracker::key;
 use crate::tracker::key::AuthKey;
 use crate::tracker::torrent::{TorrentEntry, TorrentError, TorrentStats};
 
 pub struct TorrentTracker {
-    pub config: Arc<Configuration>,
+    pub settings: Arc<Settings>,
     mode: TrackerMode,
     keys: RwLock<std::collections::HashMap<String, AuthKey>>,
     whitelist: RwLock<std::collections::HashSet<InfoHash>>,
@@ -29,12 +29,12 @@ pub struct TorrentTracker {
 }
 
 impl TorrentTracker {
-    pub fn new(config: Arc<Configuration>, stats_tracker: Box<dyn TrackerStatsService>) -> Result<TorrentTracker, r2d2::Error> {
-        let database = database::connect_database(&config.db_driver, &config.db_path)?;
+    pub fn new(settings: Arc<Settings>, stats_tracker: Box<dyn TrackerStatsService>) -> Result<TorrentTracker, r2d2::Error> {
+        let database = database::connect_database(&settings.db_driver, &settings.db_path)?;
 
         Ok(TorrentTracker {
-            config: config.clone(),
-            mode: config.mode,
+            settings: settings.clone(),
+            mode: settings.mode,
             keys: RwLock::new(std::collections::HashMap::new()),
             whitelist: RwLock::new(std::collections::HashSet::new()),
             torrents: RwLock::new(std::collections::BTreeMap::new()),
@@ -211,7 +211,7 @@ impl TorrentTracker {
         let stats_updated = torrent_entry.update_peer(peer);
 
         // todo: move this action to a separate worker
-        if self.config.persistent_torrent_completed_stat && stats_updated {
+        if self.settings.persistent_torrent_completed_stat && stats_updated {
             let _ = self
                 .database
                 .save_persistent_torrent(&info_hash, torrent_entry.completed)
@@ -244,18 +244,18 @@ impl TorrentTracker {
         let mut torrents_lock = self.torrents.write().await;
 
         // If we don't need to remove torrents we will use the faster iter
-        if self.config.remove_peerless_torrents {
+        if self.settings.remove_peerless_torrents {
             torrents_lock.retain(|_, torrent_entry| {
-                torrent_entry.remove_inactive_peers(self.config.max_peer_timeout);
+                torrent_entry.remove_inactive_peers(self.settings.max_peer_timeout);
 
-                match self.config.persistent_torrent_completed_stat {
+                match self.settings.persistent_torrent_completed_stat {
                     true => torrent_entry.completed > 0 || torrent_entry.peers.len() > 0,
                     false => torrent_entry.peers.len() > 0,
                 }
             });
         } else {
             for (_, torrent_entry) in torrents_lock.iter_mut() {
-                torrent_entry.remove_inactive_peers(self.config.max_peer_timeout);
+                torrent_entry.remove_inactive_peers(self.settings.max_peer_timeout);
             }
         }
     }

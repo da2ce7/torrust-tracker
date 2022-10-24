@@ -4,12 +4,12 @@ use chrono::Utc;
 use log::info;
 use tokio::task::JoinHandle;
 
-use crate::config::Configuration;
+use crate::settings::Settings;
 use crate::tracker::tracker::TorrentTracker;
 
-pub fn start_job(config: &Configuration, tracker: Arc<TorrentTracker>) -> JoinHandle<()> {
+pub fn start_job(settings: &Settings, tracker: Arc<TorrentTracker>) -> JoinHandle<()> {
     let weak_tracker = std::sync::Arc::downgrade(&tracker);
-    let interval = config.inactive_peer_cleanup_interval;
+    let interval = settings.inactive_peer_cleanup_interval;
 
     tokio::spawn(async move {
         let interval = std::time::Duration::from_secs(interval);
