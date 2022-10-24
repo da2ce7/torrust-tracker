@@ -1,0 +1,3 @@
+## This is the Override Configuration.
+## This will be used when needing to update values for new versions of the software.
+## Any values placed here will be loaded and will overrite the local configuration file.

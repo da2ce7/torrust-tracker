@@ -255,6 +255,7 @@ mod tests {
     use tokio::sync::mpsc::error::SendError;
     use tokio::sync::{RwLock, RwLockReadGuard};
 
+    use crate::config::Configuration;
     use crate::mode::TrackerMode;
     use crate::peer::TorrentPeer;
     use crate::protocol::clock::{DefaultClock, Time};
@@ -263,7 +264,7 @@ mod tests {
         TrackerStatsService,
     };
     use crate::tracker::tracker::TorrentTracker;
-    use crate::{Configuration, PeerId};
+    use crate::PeerId;
 
     fn default_tracker_config() -> Arc<Configuration> {
         Arc::new(Configuration::default())

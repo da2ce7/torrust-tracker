@@ -3,7 +3,6 @@ pub use http::server::*;
 pub use protocol::common::*;
 pub use udp::server::*;
 
-pub use self::config::*;
 pub use self::tracker::*;
 
 pub mod api;
@@ -13,9 +12,18 @@ pub mod http;
 pub mod jobs;
 pub mod logging;
 pub mod protocol;
+pub mod settings;
 pub mod setup;
 pub mod tracker;
 pub mod udp;
+
+pub mod config_const {
+    pub const CONFIG_FOLDER: &str = "config";
+    pub const CONFIG_DEFAULT: &str = "default";
+    pub const CONFIG_LOCAL: &str = "local";
+    pub const CONFIG_OVERRIDE: &str = "override";
+    pub const CONFIG_OLD_LOCAL: &str = "../config";
+}
 
 #[macro_use]
 extern crate lazy_static;

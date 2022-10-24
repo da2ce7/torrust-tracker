@@ -17,11 +17,12 @@ mod udp_tracker_server {
     use rand::{thread_rng, Rng};
     use tokio::net::UdpSocket;
     use tokio::task::JoinHandle;
+    use torrust_tracker::config::Configuration;
     use torrust_tracker::jobs::udp_tracker;
     use torrust_tracker::tracker::statistics::StatsTracker;
     use torrust_tracker::tracker::tracker::TorrentTracker;
     use torrust_tracker::udp::MAX_PACKET_SIZE;
-    use torrust_tracker::{logging, static_time, Configuration};
+    use torrust_tracker::{logging, static_time};
 
     fn tracker_configuration() -> Arc<Configuration> {
         let mut config = Configuration::default();

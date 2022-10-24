@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
 use log::info;
+use torrust_tracker::config::Configuration;
 use torrust_tracker::tracker::statistics::StatsTracker;
 use torrust_tracker::tracker::tracker::TorrentTracker;
-use torrust_tracker::{ephemeral_instance_keys, logging, setup, static_time, Configuration};
+use torrust_tracker::{ephemeral_instance_keys, logging, setup, static_time};
 
 #[tokio::main]
 async fn main() {

@@ -4,5 +4,8 @@
 /database.db
 /.idea/
 /config.toml
+/config.toml.old
 /data.db
 /.vscode/launch.json
+/config.backup/
+/config/local.toml
