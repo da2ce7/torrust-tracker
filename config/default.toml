@@ -20,11 +20,11 @@ inactive_peer_cleanup_interval = 600
 remove_peerless_torrents = true
 
 [[udp_trackers]]
-enabled = false
+enabled = true
 bind_address = "0.0.0.0:6969"
 
 [[http_trackers]]
-enabled = false
+enabled = true
 bind_address = "0.0.0.0:6969"
 ssl_enabled = false
 ssl_cert_path = ""

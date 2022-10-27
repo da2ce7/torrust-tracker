@@ -11,18 +11,32 @@ use crate::config_const::{CONFIG_DEFAULT, CONFIG_FOLDER, CONFIG_LOCAL, CONFIG_OL
 use crate::databases::database::DatabaseDrivers;
 use crate::mode::TrackerMode;
 
+#[serde_as]
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
 pub struct UdpTrackerConfig {
-    pub enabled: bool,
-    pub bind_address: String,
+    #[serde_as(as = "NoneAsEmptyString")]
+    pub name: Option<String>,
+    #[serde(default = "default_false")]
+    pub enabled: Option<bool>,
+    #[serde_as(as = "NoneAsEmptyString")]
+    pub bind_address: Option<String>,
+}
+
+fn default_false() -> Option<bool> {
+    Some(false)
 }
 
 #[serde_as]
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
 pub struct HttpTrackerConfig {
-    pub enabled: bool,
-    pub bind_address: String,
-    pub ssl_enabled: bool,
+    #[serde_as(as = "NoneAsEmptyString")]
+    pub name: Option<String>,
+    #[serde(default = "default_false")]
+    pub enabled: Option<bool>,
+    #[serde_as(as = "NoneAsEmptyString")]
+    pub bind_address: Option<String>,
+    #[serde(default = "default_false")]
+    pub ssl_enabled: Option<bool>,
     #[serde_as(as = "NoneAsEmptyString")]
     pub ssl_cert_path: Option<String>,
     #[serde_as(as = "NoneAsEmptyString")]
