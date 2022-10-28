@@ -1,4 +1,5 @@
 use std::net::SocketAddr;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::http::routes;
@@ -8,6 +9,24 @@ use crate::tracker::tracker::TorrentTracker;
 #[derive(Clone)]
 pub struct HttpServer {
     tracker: Arc<TorrentTracker>,
+}
+
+#[derive(Debug)]
+pub struct HttpServerSettings {
+    pub name: String,
+    pub socket_addr: SocketAddr,
+    pub tls: Option<HttpServerTlsSettings>,
+}
+
+#[derive(Debug)]
+pub struct HttpServerTlsSettings {
+    ssl_cert_path: PathBuf,
+    ssl_key_path: PathBuf,
+}
+
+#[derive(Debug)]
+pub enum HttpServerSettingsError {
+    NoName,
 }
 
 impl HttpServer {

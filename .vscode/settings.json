@@ -11,6 +11,7 @@
         "thiserror",
         "torrust",
         "typenum",
+        "Unamed",
         "untuple"
     ],
     "[rust]": {
