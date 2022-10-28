@@ -24,11 +24,6 @@ pub struct HttpServerTlsSettings {
     ssl_key_path: PathBuf,
 }
 
-#[derive(Debug)]
-pub enum HttpServerSettingsError {
-    NoName,
-}
-
 impl HttpServer {
     pub fn new(tracker: Arc<TorrentTracker>) -> HttpServer {
         HttpServer { tracker }

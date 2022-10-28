@@ -8,11 +8,11 @@ use aquatic_udp_protocol::{
 };
 
 use super::connection_cookie::{check_connection_cookie, from_connection_id, into_connection_id, make_connection_cookie};
+use crate::errors::ServerError;
 use crate::peer::TorrentPeer;
 use crate::tracker::statistics::TrackerStatisticsEvent;
 use crate::tracker::torrent::TorrentError;
 use crate::tracker::tracker::TorrentTracker;
-use crate::udp::errors::ServerError;
 use crate::udp::request::AnnounceRequestWrapper;
 use crate::{InfoHash, MAX_SCRAPE_TORRENTS};
 

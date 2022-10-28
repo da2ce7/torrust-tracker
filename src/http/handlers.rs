@@ -8,9 +8,9 @@ use log::debug;
 use warp::http::Response;
 use warp::{reject, Rejection, Reply};
 
+use crate::errors::ServerError;
 use crate::http::{
-    AnnounceRequest, AnnounceResponse, ErrorResponse, Peer, ScrapeRequest, ScrapeResponse, ScrapeResponseEntry, ServerError,
-    WebResult,
+    AnnounceRequest, AnnounceResponse, ErrorResponse, Peer, ScrapeRequest, ScrapeResponse, ScrapeResponseEntry, WebResult,
 };
 use crate::peer::TorrentPeer;
 use crate::tracker::key::AuthKey;

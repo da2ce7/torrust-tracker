@@ -7,6 +7,7 @@ pub use self::tracker::*;
 
 pub mod api;
 pub mod databases;
+pub mod errors;
 pub mod http;
 pub mod jobs;
 pub mod logging;

@@ -1,10 +1,8 @@
-pub use self::errors::*;
 pub use self::handlers::*;
 pub use self::request::*;
 pub use self::server::*;
 
 pub mod connection_cookie;
-pub mod errors;
 pub mod handlers;
 pub mod request;
 pub mod server;
