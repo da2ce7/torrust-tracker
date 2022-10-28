@@ -1,5 +1,5 @@
 use std::net::SocketAddr;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::http::routes;
@@ -14,14 +14,14 @@ pub struct HttpServer {
 #[derive(Debug)]
 pub struct HttpServerSettings {
     pub name: String,
-    pub socket_addr: SocketAddr,
+    pub socket: SocketAddr,
     pub tls: Option<HttpServerTlsSettings>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct HttpServerTlsSettings {
-    ssl_cert_path: PathBuf,
-    ssl_key_path: PathBuf,
+    pub cert_file_path: PathBuf,
+    pub key_file_path: PathBuf,
 }
 
 impl HttpServer {
@@ -42,8 +42,8 @@ impl HttpServer {
     pub fn start_tls(
         &self,
         socket_addr: SocketAddr,
-        ssl_cert_path: String,
-        ssl_key_path: String,
+        ssl_cert_path: PathBuf,
+        ssl_key_path: PathBuf,
     ) -> impl warp::Future<Output = ()> {
         let (_addr, server) = warp::serve(routes(self.tracker.clone()))
             .tls()

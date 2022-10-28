@@ -2,204 +2,252 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use log::{debug, error, info, warn};
+use log::{error, info, warn};
 use tokio::task::JoinHandle;
 
 use crate::errors::{FilePathError, HttpTlsConfigError, ServerConfigError, ServerError};
 use crate::settings::HttpTrackerConfig;
 use crate::tracker::tracker::TorrentTracker;
-use crate::{HttpServer, HttpServerSettings, HttpServerSettingsError};
+use crate::{HttpServer, HttpServerSettings, HttpServerTlsSettings};
 
 pub fn start_job(config: &HttpTrackerConfig, tracker: Arc<TorrentTracker>) -> JoinHandle<()> {
-    let bind_addr = config.bind_address.unwrap().parse::<SocketAddr>().unwrap();
-    let ssl_enabled = config.ssl_enabled;
-    let ssl_cert_path = config.ssl_cert_path.clone();
-    let ssl_key_path = config.ssl_key_path.clone();
+    let settings = get_tracker_settings(config).unwrap().unwrap();
 
     tokio::spawn(async move {
         let http_tracker = HttpServer::new(tracker);
 
-        if !ssl_enabled.unwrap() {
-            info!("Starting HTTP server on: {}", bind_addr);
-            http_tracker.start(bind_addr).await;
-        } else if ssl_enabled.unwrap() && ssl_cert_path.is_some() && ssl_key_path.is_some() {
-            info!("Starting HTTPS server on: {} (TLS)", bind_addr);
-            http_tracker
-                .start_tls(bind_addr, ssl_cert_path.unwrap(), ssl_key_path.unwrap())
-                .await;
-        } else {
-            warn!("Could not start HTTP tracker on: {}, missing SSL Cert or Key!", bind_addr);
+        match settings.tls {
+            Some(tls) => {
+                info!("Starting HTTP Server \"{}\" on: {} (TLS)", settings.name, settings.socket);
+                http_tracker
+                    .start_tls(settings.socket, tls.cert_file_path, tls.key_file_path)
+                    .await;
+            }
+            None => {
+                info!("Starting HTTP Server \"{}\" on: {}", settings.name, settings.socket);
+                http_tracker.start(settings.socket).await;
+            }
         }
     })
 }
 
 fn get_tracker_settings(config: &HttpTrackerConfig) -> Result<Option<HttpServerSettings>, ServerError> {
-    let name = config.name.unwrap_or_default();
+    let empty_string = &"".to_string();
     let is_enabled = config.enabled.unwrap_or_default();
-    let bind_addr = config.bind_address.unwrap_or_default();
-    let ssl_enabled = config.ssl_enabled.unwrap_or_default();
-    let ssl_cert_path = config.ssl_cert_path.unwrap_or_default();
-    let ssl_key_path = config.ssl_key_path.unwrap_or_default();
 
-    const HTTP_SERVER: string = "HTTP Server";
-    const HTTP_SERVER_TLS: string = "HTTP TLS Server";
+    let http_server: String = "HTTP Server".to_string();
 
-    check_name(HTTP_SERVER, name, is_enabled);
+    let name = match get_name(config.name.as_ref().unwrap_or(empty_string)) {
+        Ok(name) => {
+            info!("Info: Loading Config for HTTP Server: \"{name}\".");
+            Some(name)
+        }
+        Err(error) => {
+            let server_error = handel_server_config_error(&error, &http_server, &None);
 
-    check_binding(HTTP_SERVER, bind_addr, is_enabled);
+            if !is_enabled {
+                warn!("Warning: {}.", server_error.to_string());
+                None
+            } else {
+                error!("Error: {}!", server_error.to_string());
+                return Err(server_error);
+            }
+        }
+    };
 
-    if ssl_enabled {
-        check_path(HTTP_SERVER_TLS, ssl_cert_path, is_enabled);
-
-        if cert_path.is_some() {}
-    }
-
-    if !is_enabled {
-        info!("Will not load HTTP server: \"{server_name}\", disabled in config.");
+    // Not going to continue without a name.
+    if name.is_none() {
         return Ok(None);
-    }
+    };
 
-    Err(HttpServerSettingsError::NoName)
-}
+    let socket = match get_socket(config.bind_address.as_ref().unwrap_or(empty_string)) {
+        Ok(socket) => {
+            info!("Info: HTTP Server \"{}\" uses socket: \"{socket}\".", name.clone().unwrap());
+            Some(socket)
+        }
+        Err(error) => {
+            let server_error = handel_server_config_error(&error, &http_server, &name);
 
-fn handel_server_config_error(
-    error: ServerConfigError,
-    server_type: String,
-    server_name: String,
-    is_enabled: bool,
-) -> Result<(), ServerError> {
-    if is_enabled {
-        match error {
-            ServerConfigError::UnnamedServer => {
-                error!(
-                    "Warning: \"{}\" has error: {}",
-                    server_type,
-                    ServerConfigError::UnnamedServer.to_string()
+            if !is_enabled {
+                warn!("Warning: {}.", server_error.to_string());
+                None
+            } else {
+                error!("Error: {}!", server_error.to_string());
+                return Err(server_error);
+            }
+        }
+    };
+
+    let tls_config = if config.ssl_enabled.unwrap_or_default() {
+        match get_tls_config(
+            config.ssl_cert_path.as_ref().unwrap_or(empty_string),
+            config.ssl_key_path.as_ref().unwrap_or(empty_string),
+        ) {
+            Ok(tls_config) => {
+                info!(
+                    "Info: HTTP Server \"{}\" uses TLS Certificate: \"{}\".",
+                    name.clone().unwrap(),
+                    tls_config.cert_file_path.display().to_string(),
                 );
-                Err(ServerError::ConfigurationError { source: error })
-            }
-            ServerConfigError::BindingAddressIsEmpty => {
-                error!(
-                    "Warning: \"{}\", \"{}\" has error: {}",
-                    server_type,
-                    server_name,
-                    ServerConfigError::UnnamedServer.to_string()
+                info!(
+                    "Info: HTTP Server \"{}\" uses TLS Key: \"{}\".",
+                    name.clone().unwrap(),
+                    tls_config.cert_file_path.display().to_string(),
                 );
-                Err(ServerError::ConfigurationError { source: error })
+                Some(tls_config)
             }
-            ServerConfigError::BindingAddressBadSyntax { input, source } => {
-                warn!("");
-                Ok(())
-            }
+            Err(error) => {
+                let server_error = handel_server_config_error(&handel_http_tls_config_error(&error), &http_server, &name);
 
-            // Bad Tls Config Should be handled elsewhere.
-            ServerConfigError::BadTlsConfig { source } => Err(ServerError::InternalServerError),
+                if !is_enabled {
+                    warn!("Warning: {}.", server_error.to_string());
+                    None
+                } else {
+                    error!("Error: {}!", server_error.to_string());
+                    return Err(server_error);
+                }
+            }
         }
     } else {
-        Ok(())
-    }
-}
+        None
+    };
 
-fn handel_tls_config_error(error: HttpTlsConfigError, is_enabled: bool) -> Result<(), ServerConfigError> {
     if is_enabled {
-        match error {
-            HttpTlsConfigError::BadCertificateFilePath { source } => {
-                error!("{}", ServerConfigError::UnnamedServer.to_string());
-                Err(ServerConfigError::BadTlsConfig { source: error })
-            }
-            HttpTlsConfigError::BadKeyFilePath { source } => {
-                warn!("{}", ServerConfigError::BindingAddressIsEmpty.to_string());
-                Err(ServerConfigError::BadTlsConfig { source: error })
-            }
-        }
+        Ok(Some(HttpServerSettings {
+            name: name.unwrap(),
+            socket: socket.unwrap(),
+            tls: tls_config,
+        }))
     } else {
-        Ok(())
+        Ok(None)
     }
 }
 
-fn handel_file_path_error(error: FilePathError, is_enabled: bool) -> Result<(), ()> {
-    if is_enabled {
-        match error {
-            FilePathError::FilePathIsEmpty => {
-                error!("{}", FilePathError::FilePathIsEmpty.to_string());
-                Err(())
-            }
-            FilePathError::FilePathIsUnresolvable { input, message } => {
-                warn!("{}", FilePathError::FilePathIsEmpty.to_string());
-                Err(())
-            }
-            FilePathError::FilePathDoseNotExist { input } => {
-                warn!("{}", FilePathError::FilePathIsEmpty.to_string());
-                Err(())
-            }
+fn handel_server_config_error(error: &ServerConfigError, server_type: &String, server_name: &Option<String>) -> ServerError {
+    let unnamed = &"UNNAMED".to_string();
 
-            FilePathError::FilePathIsNotAFile { input } => {
-                warn!("{}", FilePathError::FilePathIsEmpty.to_string());
-                Err(())
+    match error {
+        ServerConfigError::UnnamedServer => {
+            let message = format!("\"{}\", {}", server_type, ServerConfigError::UnnamedServer);
+            ServerError::ConfigurationError {
+                message,
+                source: error.clone(),
             }
         }
-    } else {
-        Ok(())
+        ServerConfigError::BindingAddressIsEmpty => {
+            let message = format!(
+                "\"{}\", \"{}\", {}",
+                server_type,
+                server_name.as_ref().unwrap_or(unnamed),
+                ServerConfigError::BindingAddressIsEmpty
+            );
+            ServerError::ConfigurationError {
+                message,
+                source: error.clone(),
+            }
+        }
+        ServerConfigError::BindingAddressBadSyntax { input, source } => {
+            let message = format!(
+                "Error: \"{}\", \"{}\", {}.",
+                server_type,
+                server_name.as_ref().unwrap_or(unnamed),
+                ServerConfigError::BindingAddressBadSyntax {
+                    input: input.clone(),
+                    source: source.clone()
+                },
+            );
+            ServerError::ConfigurationError {
+                message,
+                source: error.clone(),
+            }
+        }
+
+        ServerConfigError::BadHttpTlsConfig { source } => {
+            let message = format!(
+                "Error: \"{}\", \"{}\", {}.",
+                server_type,
+                server_name.as_ref().unwrap_or(unnamed),
+                ServerConfigError::BadHttpTlsConfig { source: source.clone() },
+            );
+            ServerError::ConfigurationError {
+                message,
+                source: error.clone(),
+            }
+        }
     }
 }
 
-fn check_name(server_type: String, name: String, is_enabled: bool) -> Result<(), ServerConfigError> {
-    if name.is_empty() {
+fn handel_http_tls_config_error(error: &HttpTlsConfigError) -> ServerConfigError {
+    match error {
+        HttpTlsConfigError::BadCertificateFilePath { source } => ServerConfigError::BadHttpTlsConfig {
+            source: HttpTlsConfigError::BadCertificateFilePath { source: source.clone() },
+        },
+        HttpTlsConfigError::BadKeyFilePath { source } => ServerConfigError::BadHttpTlsConfig {
+            source: HttpTlsConfigError::BadKeyFilePath { source: source.clone() },
+        },
+    }
+}
+
+fn get_name(name: &String) -> Result<String, ServerConfigError> {
+    if !name.is_empty() {
+        Ok(name.clone())
+    } else {
         Err(ServerConfigError::UnnamedServer)
-    } else {
-        Ok(())
     }
 }
 
-fn check_binding(
-    server_type: String,
-    server_name: String,
-    bind_addr: String,
-    is_enabled: bool,
-) -> Result<SocketAddr, ServerConfigError> {
-    if bind_addr.is_empty() {
-        Err(ServerConfigError::BindingAddressIsEmpty)
-    } else {
+fn get_socket(bind_addr: &String) -> Result<SocketAddr, ServerConfigError> {
+    if !bind_addr.is_empty() {
         match bind_addr.parse::<SocketAddr>() {
             Ok(socket) => Ok(socket),
-            Err(e) => Err(ServerConfigError::BindingAddressBadSyntax {
-                input: bind_addr,
-                error: e,
+            Err(source) => Err(ServerConfigError::BindingAddressBadSyntax {
+                input: bind_addr.to_string(),
+                source,
             }),
         }
+    } else {
+        Err(ServerConfigError::BindingAddressIsEmpty)
     }
 }
 
-fn check_path(
-    server_type: String,
-    server_name: String,
-    path_type: String,
-    path: String,
-    is_enabled: bool,
-) -> Result<PathBuf, ServerConfigError> {
-    if path.is_empty() {
-        Err(ServerConfigError::FilePathIsEmpty)
-    } else {
+fn get_tls_config(tls_cert_path: &String, tls_key_path: &String) -> Result<HttpServerTlsSettings, HttpTlsConfigError> {
+    let cert_file_path = match get_path(tls_cert_path) {
+        Ok(path) => path,
+        Err(source) => return Err(HttpTlsConfigError::BadCertificateFilePath { source }),
+    };
+
+    let key_file_path = match get_path(tls_key_path) {
+        Ok(path) => path,
+        Err(source) => return Err(HttpTlsConfigError::BadKeyFilePath { source }),
+    };
+
+    Ok(HttpServerTlsSettings {
+        cert_file_path,
+        key_file_path,
+    })
+}
+
+fn get_path(path: &String) -> Result<PathBuf, FilePathError> {
+    if !path.is_empty() {
         match Path::new(&path).canonicalize() {
-            Ok(path_resolved) => {
-                if path_resolved.exists() {
-                    if path_resolved.is_file() {
-                        Ok(path_resolved)
+            Ok(path) => {
+                if path.exists() {
+                    if path.is_file() {
+                        Ok(path)
                     } else {
-                        Err(ServerConfigError::FilePathIsNotAFile {
-                            input: path_resolved.display().to_string(),
+                        Err(FilePathError::FilePathIsNotAFile {
+                            input: path.display().to_string(),
                         })
                     }
                 } else {
-                    Err(ServerConfigError::FilePathDoseNotExist {
-                        input: path_resolved.display().to_string(),
+                    Err(FilePathError::FilePathDoseNotExist {
+                        input: path.display().to_string(),
                     })
                 }
             }
-            Err(e) => Err(ServerConfigError::FilePathIsUnresolvable {
-                input: path,
-                error: e.to_string(),
-            }),
+            Err(e) => Err(FilePathError::FilePathDoseNotExist { input: path.clone() }),
         }
+    } else {
+        Err(FilePathError::FilePathIsEmpty)
     }
 }

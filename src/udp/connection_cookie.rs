@@ -43,7 +43,7 @@ pub fn check_connection_cookie(
             return Ok(checking_time_extent);
         }
     }
-    Err(ServerError::InvalidConnectionId)
+    Err(ServerError::InvalidConnectionCookie)
 }
 
 mod cookie_builder {

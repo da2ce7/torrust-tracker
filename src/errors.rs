@@ -33,50 +33,53 @@ pub enum ServerError {
     #[error("bad request")]
     BadRequest,
 
+    #[error("connection cookie is not valid")]
+    InvalidConnectionCookie,
+
     #[error("bad server configuration")]
-    ConfigurationError { source: ServerConfigError },
+    ConfigurationError { message: String, source: ServerConfigError },
 }
 
 impl Reject for ServerError {}
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum ServerConfigError {
-    #[error("server is unamed")]
+    #[error("This Server is Unamed!")]
     UnnamedServer,
 
-    #[error("empty binding address")]
+    #[error("Binding Address is Empty!")]
     BindingAddressIsEmpty,
 
-    #[error("failed to parse binding address: {input}")]
+    #[error("Binding Address: \"{input}\" has Bad Syntax: {source}")]
     BindingAddressBadSyntax {
         input: String,
         source: std::net::AddrParseError,
     },
 
-    #[error("bad tls configuration")]
-    BadTlsConfig { source: HttpTlsConfigError },
+    #[error("Bad TLS Configuration: {source}")]
+    BadHttpTlsConfig { source: HttpTlsConfigError },
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum HttpTlsConfigError {
-    #[error("unable to find certificate file")]
+    #[error("Unable to find TLS Certificate File: {source}")]
     BadCertificateFilePath { source: FilePathError },
 
-    #[error("unable to find key file")]
+    #[error("Unable to find TLS Key File: {source}")]
     BadKeyFilePath { source: FilePathError },
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum FilePathError {
-    #[error("empty path")]
+    #[error("File Path Supplied is Empty!")]
     FilePathIsEmpty,
 
-    #[error("failed to canonicalize path: {input}, {message}")]
+    #[error("File Path failed to Canonicalize: {input}, {message}")]
     FilePathIsUnresolvable { input: String, message: String },
 
-    #[error("failed to locate path: {input}")]
+    #[error("File Path destination dose not exist: {input}")]
     FilePathDoseNotExist { input: String },
 
-    #[error("path is not a file: {input}")]
+    #[error("File Path destination is not a file: {input}")]
     FilePathIsNotAFile { input: String },
 }

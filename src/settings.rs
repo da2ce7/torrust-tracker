@@ -27,7 +27,7 @@ fn default_false() -> Option<bool> {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct HttpTrackerConfig {
     #[serde_as(as = "NoneAsEmptyString")]
     pub name: Option<String>,
@@ -229,7 +229,7 @@ mod tests {
     fn configuration_should_be_saved_in_a_toml_config_file() {
         let temp_config_path = env::temp_dir().as_path().join(format!("test_config_{}.toml", Uuid::new_v4()));
 
-        let settings = Settings::new().unwrap();
+        let settings = Settings::default().unwrap();
 
         settings
             .write(&temp_config_path)

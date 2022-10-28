@@ -11,13 +11,13 @@ pub fn start_job(settings: &UdpTrackerConfig, tracker: Arc<TorrentTracker>) -> J
     let bind_addr = settings.bind_address.clone();
 
     tokio::spawn(async move {
-        match UdpServer::new(tracker, &bind_addr).await {
+        match UdpServer::new(tracker, &bind_addr.as_ref().unwrap()).await {
             Ok(udp_server) => {
-                info!("Starting UDP server on: {}", bind_addr);
+                info!("Starting UDP server on: {}", bind_addr.as_ref().clone().unwrap());
                 udp_server.start().await;
             }
             Err(e) => {
-                warn!("Could not start UDP tracker on: {}", bind_addr);
+                warn!("Could not start UDP tracker on: {}", bind_addr.as_ref().unwrap());
                 error!("{}", e);
             }
         }

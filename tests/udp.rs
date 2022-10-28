@@ -27,7 +27,7 @@ mod udp_tracker_server {
     fn tracker_settings() -> Arc<Settings> {
         let mut settings = Settings::default().unwrap();
         settings.log_level = Some("off".to_owned());
-        settings.udp_trackers[0].bind_address = format!("127.0.0.1:{}", ephemeral_random_port());
+        settings.udp_trackers[0].bind_address = Some(format!("127.0.0.1:{}", ephemeral_random_port()));
         Arc::new(settings)
     }
 
@@ -70,7 +70,7 @@ mod udp_tracker_server {
                 // Start the UDP tracker job
                 self.job = Some(udp_tracker::start_job(&udp_tracker_settings, tracker.clone()));
 
-                self.bind_address = Some(udp_tracker_settings.bind_address.clone());
+                self.bind_address = Some(udp_tracker_settings.bind_address.clone().unwrap());
 
                 self.started.store(true, Ordering::Relaxed);
             }

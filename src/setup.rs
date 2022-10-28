@@ -25,14 +25,15 @@ pub async fn setup(settings: &Settings, tracker: Arc<TorrentTracker>) -> Vec<Joi
 
     // Start the UDP blocks
     for udp_tracker_settings in &settings.udp_trackers {
-        if !udp_tracker_settings.enabled {
+        if !udp_tracker_settings.enabled.unwrap_or_default() {
             continue;
         }
 
         if tracker.is_private() {
             warn!(
                 "Could not start UDP tracker on: {} while in {:?}. UDP is not safe for private trackers!",
-                udp_tracker_settings.bind_address, settings.mode
+                udp_tracker_settings.bind_address.clone().unwrap(),
+                settings.mode
             );
         } else {
             jobs.push(udp_tracker::start_job(&udp_tracker_settings, tracker.clone()))
@@ -41,7 +42,7 @@ pub async fn setup(settings: &Settings, tracker: Arc<TorrentTracker>) -> Vec<Joi
 
     // Start the HTTP blocks
     for http_tracker_settings in &settings.http_trackers {
-        if !http_tracker_settings.enabled {
+        if !http_tracker_settings.enabled.unwrap_or_default() {
             continue;
         }
         jobs.push(http_tracker::start_job(&http_tracker_settings, tracker.clone()));
