@@ -11,46 +11,51 @@ use crate::config_const::{CONFIG_DEFAULT, CONFIG_FOLDER, CONFIG_LOCAL, CONFIG_OL
 use crate::databases::database::DatabaseDrivers;
 use crate::mode::TrackerMode;
 
-#[serde_as]
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
-pub struct UdpTrackerConfig {
-    #[serde_as(as = "NoneAsEmptyString")]
-    pub name: Option<String>,
-    #[serde(default = "default_false")]
-    pub enabled: Option<bool>,
-    #[serde_as(as = "NoneAsEmptyString")]
-    pub bind_address: Option<String>,
+fn mk_false() -> Option<bool> {
+    Some(false)
 }
 
-fn default_false() -> Option<bool> {
-    Some(false)
+fn mk_empty() -> Option<String> {
+    Some("".to_string())
+}
+
+#[serde_as]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+pub struct UdpTrackerConfig {
+    #[serde(default = "mk_empty")]
+    pub name: Option<String>,
+    #[serde(default = "mk_false")]
+    pub enabled: Option<bool>,
+    #[serde(default = "mk_empty")]
+    pub bind_address: Option<String>,
 }
 
 #[serde_as]
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct HttpTrackerConfig {
-    #[serde_as(as = "NoneAsEmptyString")]
-    pub name: Option<String>,
-    #[serde(default = "default_false")]
+    #[serde(default = "mk_empty")]
+    pub display_name: Option<String>,
+    #[serde(default = "mk_false")]
     pub enabled: Option<bool>,
-    #[serde_as(as = "NoneAsEmptyString")]
+    #[serde(default = "mk_empty")]
     pub bind_address: Option<String>,
-    #[serde(default = "default_false")]
-    pub ssl_enabled: Option<bool>,
-    #[serde_as(as = "NoneAsEmptyString")]
-    pub ssl_cert_path: Option<String>,
-    #[serde_as(as = "NoneAsEmptyString")]
-    pub ssl_key_path: Option<String>,
+    #[serde(default = "mk_false")]
+    pub tls_enabled: Option<bool>,
+    #[serde(default = "mk_empty")]
+    pub tls_cert_path: Option<String>,
+    #[serde(default = "mk_empty")]
+    pub tls_key_path: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct HttpApiConfig {
     pub enabled: bool,
-    pub bind_address: String,
+    pub bind_address: Option<String>,
     pub access_tokens: HashMap<String, String>,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[serde_as]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct Settings {
     pub log_level: Option<String>,
     pub mode: TrackerMode,
@@ -65,8 +70,10 @@ pub struct Settings {
     pub persistent_torrent_completed_stat: bool,
     pub inactive_peer_cleanup_interval: u64,
     pub remove_peerless_torrents: bool,
-    pub udp_trackers: Vec<UdpTrackerConfig>,
-    pub http_trackers: Vec<HttpTrackerConfig>,
+    pub udp_trackers: Option<Vec<UdpTrackerConfig>>,
+    pub udp_tracker: Option<HashMap<String, UdpTrackerConfig>>,
+    pub http_trackers: Option<Vec<HttpTrackerConfig>>,
+    pub http_tracker: Option<HashMap<String, HttpTrackerConfig>>,
     pub http_api: HttpApiConfig,
 }
 
@@ -96,7 +103,7 @@ impl Settings {
         Self::migrate_old_config()?;
 
         let sources = Self::get_sources()?;
-        let settings = Self::load(&sources)?;
+        let mut settings = Self::load(&sources)?;
 
         settings.write(&local_source)?;
 
@@ -126,7 +133,7 @@ impl Settings {
             sources.push(old_local_source.clone())
         }
 
-        let settings = Self::load(&sources)?;
+        let mut settings = Self::load(&sources)?;
         settings.write(&local_source)?;
 
         match fs::rename(
@@ -199,6 +206,15 @@ impl Settings {
     }
 
     fn write(&self, destination: &Path) -> Result<(), ConfigurationError> {
+        let htt = self.http_trackers.first().unwrap();
+
+        let mut hte: HashMap<String, HttpTrackerConfig> = HashMap::new();
+
+        hte.insert("test".to_string(), htt.clone());
+        hte.insert("test2".to_string(), htt.clone());
+
+        self.http_trackers_b = Some(hte);
+
         let toml_string = match toml::to_string(self) {
             Ok(s) => s,
             Err(e) => return Err(ConfigurationError::EncodeError { error: e }),
@@ -213,26 +229,39 @@ impl Settings {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
     use std::{env, fs};
 
     use uuid::Uuid;
 
+    use crate::config_const::{CONFIG_FOLDER, CONFIG_LOCAL};
     use crate::settings::Settings;
 
     #[test]
-    fn configuration_should_contain_the_external_ip() {
+    fn default_settings_should_contain_an_external_ip() {
         let settings = Settings::default().unwrap();
         assert_eq!(settings.external_ip, Option::Some(String::from("0.0.0.0")));
+    }
+
+    #[test]
+    fn settings_should_be_automatically_saved_into_local_config() {
+        let local_source = Path::new(CONFIG_FOLDER).join(CONFIG_LOCAL).with_extension("toml");
+
+        let settings = Settings::new().unwrap();
+
+        let contents = fs::read_to_string(&local_source).unwrap();
+
+        assert_eq!(contents, toml::to_string(&settings).unwrap());
     }
 
     #[test]
     fn configuration_should_be_saved_in_a_toml_config_file() {
         let temp_config_path = env::temp_dir().as_path().join(format!("test_config_{}.toml", Uuid::new_v4()));
 
-        let settings = Settings::default().unwrap();
+        let mut settings = Settings::default().unwrap();
 
         settings
-            .write(&temp_config_path)
+            .write(temp_config_path.as_ref())
             .expect("Could not save configuration to file");
 
         let contents = fs::read_to_string(&temp_config_path).unwrap();

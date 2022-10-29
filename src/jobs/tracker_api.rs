@@ -11,6 +11,8 @@ pub fn start_job(settings: &Settings, tracker: Arc<TorrentTracker>) -> JoinHandl
     let bind_addr = settings
         .http_api
         .bind_address
+        .as_ref()
+        .unwrap()
         .parse::<std::net::SocketAddr>()
         .expect("Tracker API bind_address invalid.");
     info!("Starting Torrust API server on: {}", bind_addr);

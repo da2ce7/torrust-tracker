@@ -57,11 +57,11 @@ pub enum ServerConfigError {
     },
 
     #[error("Bad TLS Configuration: {source}")]
-    BadHttpTlsConfig { source: HttpTlsConfigError },
+    BadHttpTlsConfig { source: TlsConfigError },
 }
 
 #[derive(Error, Debug, Clone)]
-pub enum HttpTlsConfigError {
+pub enum TlsConfigError {
     #[error("Unable to find TLS Certificate File: {source}")]
     BadCertificateFilePath { source: FilePathError },
 

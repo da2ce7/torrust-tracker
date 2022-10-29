@@ -15,11 +15,11 @@ pub struct HttpServer {
 pub struct HttpServerSettings {
     pub name: String,
     pub socket: SocketAddr,
-    pub tls: Option<HttpServerTlsSettings>,
+    pub tls: Option<TlsSettings>,
 }
 
 #[derive(Debug, Clone)]
-pub struct HttpServerTlsSettings {
+pub struct TlsSettings {
     pub cert_file_path: PathBuf,
     pub key_file_path: PathBuf,
 }

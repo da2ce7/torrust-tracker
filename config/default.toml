@@ -25,12 +25,17 @@ enabled = false
 bind_address = "0.0.0.0:6969"
 
 [[http_trackers]]
-name = "Rwars"
-enabled = false
-bind_address = "0.0.0.0:6969"
-ssl_enabled = false
-ssl_cert_path = ""
-ssl_key_path = ""
+name = ""
+#bind_address = "0.0.0.0:6969"
+#ssl_cert_path = ""
+#ssl_key_path = ""
+
+[[http_trackers]]
+#name = "2"
+#bind_address = "0.0.0.0:6969"
+#ssl_cert_path = ""
+#ssl_key_path = ""
+
 
 [http_api]
 enabled = false

@@ -5,10 +5,10 @@ use std::sync::Arc;
 use log::{error, info, warn};
 use tokio::task::JoinHandle;
 
-use crate::errors::{FilePathError, HttpTlsConfigError, ServerConfigError, ServerError};
+use crate::errors::{FilePathError, ServerConfigError, ServerError, TlsConfigError};
 use crate::settings::HttpTrackerConfig;
 use crate::tracker::tracker::TorrentTracker;
-use crate::{HttpServer, HttpServerSettings, HttpServerTlsSettings};
+use crate::{HttpServer, HttpServerSettings, TlsSettings};
 
 pub fn start_job(config: &HttpTrackerConfig, tracker: Arc<TorrentTracker>) -> JoinHandle<()> {
     let settings = get_tracker_settings(config).unwrap().unwrap();
@@ -37,7 +37,7 @@ fn get_tracker_settings(config: &HttpTrackerConfig) -> Result<Option<HttpServerS
 
     let http_server: String = "HTTP Server".to_string();
 
-    let name = match get_name(config.name.as_ref().unwrap_or(empty_string)) {
+    let name = match get_name(config.display_name.as_ref().unwrap_or(empty_string)) {
         Ok(name) => {
             info!("Info: Loading Config for HTTP Server: \"{name}\".");
             Some(name)
@@ -78,10 +78,10 @@ fn get_tracker_settings(config: &HttpTrackerConfig) -> Result<Option<HttpServerS
         }
     };
 
-    let tls_config = if config.ssl_enabled.unwrap_or_default() {
+    let tls_config = if config.tls_enabled.unwrap_or_default() {
         match get_tls_config(
-            config.ssl_cert_path.as_ref().unwrap_or(empty_string),
-            config.ssl_key_path.as_ref().unwrap_or(empty_string),
+            config.tls_cert_path.as_ref().unwrap_or(empty_string),
+            config.tls_key_path.as_ref().unwrap_or(empty_string),
         ) {
             Ok(tls_config) => {
                 info!(
@@ -177,13 +177,13 @@ fn handel_server_config_error(error: &ServerConfigError, server_type: &String, s
     }
 }
 
-fn handel_http_tls_config_error(error: &HttpTlsConfigError) -> ServerConfigError {
+fn handel_http_tls_config_error(error: &TlsConfigError) -> ServerConfigError {
     match error {
-        HttpTlsConfigError::BadCertificateFilePath { source } => ServerConfigError::BadHttpTlsConfig {
-            source: HttpTlsConfigError::BadCertificateFilePath { source: source.clone() },
+        TlsConfigError::BadCertificateFilePath { source } => ServerConfigError::BadHttpTlsConfig {
+            source: TlsConfigError::BadCertificateFilePath { source: source.clone() },
         },
-        HttpTlsConfigError::BadKeyFilePath { source } => ServerConfigError::BadHttpTlsConfig {
-            source: HttpTlsConfigError::BadKeyFilePath { source: source.clone() },
+        TlsConfigError::BadKeyFilePath { source } => ServerConfigError::BadHttpTlsConfig {
+            source: TlsConfigError::BadKeyFilePath { source: source.clone() },
         },
     }
 }
@@ -210,18 +210,18 @@ fn get_socket(bind_addr: &String) -> Result<SocketAddr, ServerConfigError> {
     }
 }
 
-fn get_tls_config(tls_cert_path: &String, tls_key_path: &String) -> Result<HttpServerTlsSettings, HttpTlsConfigError> {
+fn get_tls_config(tls_cert_path: &String, tls_key_path: &String) -> Result<TlsSettings, TlsConfigError> {
     let cert_file_path = match get_path(tls_cert_path) {
         Ok(path) => path,
-        Err(source) => return Err(HttpTlsConfigError::BadCertificateFilePath { source }),
+        Err(source) => return Err(TlsConfigError::BadCertificateFilePath { source }),
     };
 
     let key_file_path = match get_path(tls_key_path) {
         Ok(path) => path,
-        Err(source) => return Err(HttpTlsConfigError::BadKeyFilePath { source }),
+        Err(source) => return Err(TlsConfigError::BadKeyFilePath { source }),
     };
 
-    Ok(HttpServerTlsSettings {
+    Ok(TlsSettings {
         cert_file_path,
         key_file_path,
     })
@@ -245,7 +245,10 @@ fn get_path(path: &String) -> Result<PathBuf, FilePathError> {
                     })
                 }
             }
-            Err(e) => Err(FilePathError::FilePathDoseNotExist { input: path.clone() }),
+            Err(error) => Err(FilePathError::FilePathIsUnresolvable {
+                input: path.clone(),
+                message: error.to_string(),
+            }),
         }
     } else {
         Err(FilePathError::FilePathIsEmpty)
