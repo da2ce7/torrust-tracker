@@ -18,7 +18,7 @@ mod udp_tracker_server {
     use tokio::net::UdpSocket;
     use tokio::task::JoinHandle;
     use torrust_tracker::jobs::udp_tracker;
-    use torrust_tracker::settings::Settings;
+    use torrust_tracker::settings::old_settings::Settings;
     use torrust_tracker::tracker::statistics::StatsTracker;
     use torrust_tracker::tracker::tracker::TorrentTracker;
     use torrust_tracker::udp::MAX_PACKET_SIZE;
@@ -27,7 +27,7 @@ mod udp_tracker_server {
     fn tracker_settings() -> Arc<Settings> {
         let mut settings = &mut Settings::default().unwrap();
         settings.log_level = Some("off".to_owned());
-        settings.udp_trackers.as_ref().unwrap()[0].bind_address = Some(format!("127.0.0.1:{}", ephemeral_random_port()));
+        settings.udp_trackers.as_mut().unwrap()[0].bind_address = Some(format!("127.0.0.1:{}", ephemeral_random_port()));
         Arc::new(settings.clone())
     }
 

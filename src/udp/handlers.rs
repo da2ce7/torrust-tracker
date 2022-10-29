@@ -130,7 +130,7 @@ pub async fn handle_announce(
     let announce_response = if remote_addr.is_ipv4() {
         Response::from(AnnounceResponse {
             transaction_id: wrapped_announce_request.announce_request.transaction_id,
-            announce_interval: AnnounceInterval(tracker.settings.announce_interval as i32),
+            announce_interval: AnnounceInterval(tracker.settings.announce_interval.unwrap() as i32),
             leechers: NumberOfPeers(torrent_stats.leechers as i32),
             seeders: NumberOfPeers(torrent_stats.seeders as i32),
             peers: peers
@@ -150,7 +150,7 @@ pub async fn handle_announce(
     } else {
         Response::from(AnnounceResponse {
             transaction_id: wrapped_announce_request.announce_request.transaction_id,
-            announce_interval: AnnounceInterval(tracker.settings.announce_interval as i32),
+            announce_interval: AnnounceInterval(tracker.settings.announce_interval.unwrap() as i32),
             leechers: NumberOfPeers(torrent_stats.leechers as i32),
             seeders: NumberOfPeers(torrent_stats.seeders as i32),
             peers: peers
@@ -262,7 +262,7 @@ mod tests {
     use crate::mode::TrackerMode;
     use crate::peer::TorrentPeer;
     use crate::protocol::clock::{DefaultClock, Time};
-    use crate::settings::Settings;
+    use crate::settings::old_settings::Settings;
     use crate::statistics::{
         StatsTracker, TrackerStatistics, TrackerStatisticsEvent, TrackerStatisticsEventSender, TrackerStatisticsRepository,
         TrackerStatsService,
@@ -398,7 +398,7 @@ mod tests {
         }
 
         pub fn with_mode(mut self, mode: TrackerMode) -> Self {
-            self.settings.mode = mode;
+            self.settings.mode = Some(mode);
             self
         }
 

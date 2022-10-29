@@ -7,10 +7,16 @@ use crate::databases::sqlite::SqliteDatabase;
 use crate::tracker::key::AuthKey;
 use crate::InfoHash;
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Copy, Clone, Hash)]
 pub enum DatabaseDrivers {
     Sqlite3,
     MySQL,
+}
+
+impl Default for DatabaseDrivers {
+    fn default() -> Self {
+        DatabaseDrivers::Sqlite3
+    }
 }
 
 pub fn connect_database(db_driver: &DatabaseDrivers, db_path: &str) -> Result<Box<dyn Database>, r2d2::Error> {

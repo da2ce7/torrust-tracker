@@ -1,71 +1,500 @@
-use std::collections::HashMap;
+use std::collections::btree_map::Entry::Vacant;
+use std::collections::hash_map::RandomState;
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use config::{Config, ConfigError, File};
 use log::info;
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 
 use crate::config_const::{CONFIG_DEFAULT, CONFIG_FOLDER, CONFIG_LOCAL, CONFIG_OLD_LOCAL, CONFIG_OVERRIDE};
 use crate::databases::database::DatabaseDrivers;
 use crate::mode::TrackerMode;
 
-fn mk_false() -> Option<bool> {
-    Some(false)
+pub mod old_settings {
+    use std::collections::BTreeMap;
+
+    use serde::{Deserialize, Serialize};
+    use serde_with::serde_as;
+
+    use crate::databases::database::DatabaseDrivers;
+    use crate::mode::TrackerMode;
+
+    #[serde_as]
+    #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+    pub struct UdpTrackerConfig {
+        pub display_name: Option<String>,
+        pub enabled: Option<bool>,
+        pub bind_address: Option<String>,
+    }
+
+    #[serde_as]
+    #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Default)]
+    pub struct HttpTrackerConfig {
+        pub display_name: Option<String>,
+        pub enabled: Option<bool>,
+        pub bind_address: Option<String>,
+        pub ssl_enabled: Option<bool>,
+        pub ssl_cert_path: Option<String>,
+        pub ssl_key_path: Option<String>,
+    }
+
+    #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+    pub struct HttpApiConfig {
+        pub enabled: Option<bool>,
+        pub bind_address: Option<String>,
+        pub access_tokens: Option<BTreeMap<String, String>>,
+    }
+
+    #[serde_as]
+    #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Default)]
+    pub struct Settings {
+        pub log_level: Option<String>,
+        pub mode: Option<TrackerMode>,
+        pub db_driver: Option<DatabaseDrivers>,
+        pub db_path: Option<String>,
+        pub announce_interval: Option<u32>,
+        pub min_announce_interval: Option<u32>,
+        pub max_peer_timeout: Option<u32>,
+        pub on_reverse_proxy: Option<bool>,
+        pub external_ip: Option<String>,
+        pub tracker_usage_statistics: Option<bool>,
+        pub persistent_torrent_completed_stat: Option<bool>,
+        pub inactive_peer_cleanup_interval: Option<u64>,
+        pub remove_peerless_torrents: Option<bool>,
+        pub udp_trackers: Option<Vec<UdpTrackerConfig>>,
+        pub http_trackers: Option<Vec<HttpTrackerConfig>>,
+        pub http_api: Option<HttpApiConfig>,
+    }
 }
 
-fn mk_empty() -> Option<String> {
-    Some("".to_string())
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Default, Hash)]
+pub struct TrackerSettings {
+    pub global: Option<GlobalSettings>,
+    pub common: Option<CommonSettings>,
+    pub service: Option<BTreeMap<String, ServiceSetting>>,
 }
 
-#[serde_as]
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
-pub struct UdpTrackerConfig {
-    pub display_name: Option<String>,
-    pub enabled: Option<bool>,
-    pub bind_address: Option<String>,
+pub struct TrackerSettingsBuilder {
+    settings: TrackerSettings,
 }
 
-#[serde_as]
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Default)]
-pub struct HttpTrackerConfig {
-    pub display_name: Option<String>,
-    pub enabled: Option<bool>,
-    pub bind_address: Option<String>,
-    pub tls_enabled: Option<bool>,
-    pub tls_cert_path: Option<String>,
-    pub tls_key_path: Option<String>,
+impl From<TrackerSettings> for TrackerSettingsBuilder {
+    fn from(settings: TrackerSettings) -> Self {
+        TrackerSettingsBuilder { settings }
+    }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
-pub struct HttpApiConfig {
-    pub enabled: bool,
-    pub bind_address: Option<String>,
-    pub access_tokens: HashMap<String, String>,
+impl TrackerSettingsBuilder {
+    pub fn empty() -> TrackerSettingsBuilder {
+        TrackerSettingsBuilder {
+            settings: TrackerSettings::default(),
+        }
+    }
+
+    pub fn default() -> TrackerSettingsBuilder {
+        TrackerSettingsBuilder {
+            settings: TrackerSettings {
+                global: Some(GlobalSettingsBuilder::default().global_settings),
+                common: Some(CommonSettingsBuilder::default().common_settings),
+                service: Some(ServicesBuilder::default().services),
+            },
+        }
+    }
+
+    pub fn import_old(&mut self, old_settings: &old_settings::Settings) {
+        let mut builder = match self.settings.global.as_ref() {
+            Some(settings) => GlobalSettingsBuilder::from(settings.clone()),
+            None => GlobalSettingsBuilder::empty(),
+        };
+        builder.import_old(old_settings);
+
+        self.settings.global = Some(builder.global_settings);
+
+        let mut builder = match self.settings.common.as_ref() {
+            Some(settings) => CommonSettingsBuilder::from(settings.clone()),
+            None => CommonSettingsBuilder::empty(),
+        };
+        builder.import_old(old_settings);
+
+        self.settings.common = Some(builder.common_settings);
+
+        let mut builder = match self.settings.service.as_ref() {
+            Some(settings) => ServicesBuilder::from(settings.clone()),
+            None => ServicesBuilder::empty(),
+        };
+        builder.import_old(old_settings);
+
+        self.settings.service = Some(builder.services);
+    }
 }
 
-#[serde_as]
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
-pub struct Settings {
-    pub log_level: Option<String>,
-    pub mode: TrackerMode,
-    pub db_driver: Option<DatabaseDrivers>,
-    pub db_path: String,
-    pub announce_interval: u32,
-    pub min_announce_interval: u32,
-    pub max_peer_timeout: u32,
-    pub on_reverse_proxy: bool,
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Default, Hash)]
+pub struct GlobalSettings {
+    pub log_filter_level: Option<LogFilterLevel>,
     pub external_ip: Option<String>,
-    pub tracker_usage_statistics: bool,
-    pub persistent_torrent_completed_stat: bool,
-    pub inactive_peer_cleanup_interval: u64,
-    pub remove_peerless_torrents: bool,
-    pub udp_trackers: Option<Vec<UdpTrackerConfig>>,
-    pub udp_tracker: Option<HashMap<String, UdpTrackerConfig>>,
-    pub http_trackers: Option<Vec<HttpTrackerConfig>>,
-    pub http_tracker: Option<HashMap<String, HttpTrackerConfig>>,
-    pub http_api: HttpApiConfig,
+    pub on_reverse_proxy: Option<bool>,
+}
+
+pub struct GlobalSettingsBuilder {
+    pub global_settings: GlobalSettings,
+}
+
+impl From<GlobalSettings> for GlobalSettingsBuilder {
+    fn from(global_settings: GlobalSettings) -> Self {
+        GlobalSettingsBuilder { global_settings }
+    }
+}
+
+impl GlobalSettingsBuilder {
+    pub fn empty() -> GlobalSettingsBuilder {
+        GlobalSettingsBuilder {
+            global_settings: GlobalSettings::default(),
+        }
+    }
+
+    pub fn default() -> GlobalSettingsBuilder {
+        GlobalSettingsBuilder {
+            global_settings: GlobalSettings {
+                log_filter_level: Some(LogFilterLevel::Info),
+                external_ip: Some("".to_string()),
+                on_reverse_proxy: Some(false),
+            },
+        }
+    }
+
+    pub fn import_old(&mut self, old_settings: &old_settings::Settings) {
+        if let Some(val) = old_settings.log_level.as_ref() {
+            self.global_settings.log_filter_level = match val.to_lowercase().as_str() {
+                "off" => Some(LogFilterLevel::Off),
+                "trace" => Some(LogFilterLevel::Trace),
+                "debug" => Some(LogFilterLevel::Debug),
+                "info" => Some(LogFilterLevel::Info),
+                "warn" => Some(LogFilterLevel::Warn),
+                "error" => Some(LogFilterLevel::Error),
+                _ => None,
+            }
+        }
+
+        if let Some(val) = old_settings.external_ip.as_ref() {
+            self.global_settings.external_ip = Some(val.clone());
+        }
+
+        if let Some(val) = old_settings.on_reverse_proxy {
+            self.global_settings.on_reverse_proxy = Some(val);
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Default, Hash)]
+pub struct CommonSettings {
+    pub tracker_mode: Option<TrackerMode>,
+    pub database: Option<DatabaseSettings>,
+    pub announce_interval: Option<u32>,
+    pub min_announce_interval: Option<u32>,
+    pub max_peer_timeout: Option<u32>,
+    pub tracker_usage_statistics: Option<bool>,
+    pub persistent_torrent_completed_stat: Option<bool>,
+    pub inactive_peer_cleanup_interval: Option<u64>,
+    pub remove_peerless_torrents: Option<bool>,
+}
+
+pub struct CommonSettingsBuilder {
+    pub common_settings: CommonSettings,
+}
+
+impl From<CommonSettings> for CommonSettingsBuilder {
+    fn from(common_settings: CommonSettings) -> Self {
+        CommonSettingsBuilder { common_settings }
+    }
+}
+
+impl CommonSettingsBuilder {
+    pub fn empty() -> CommonSettingsBuilder {
+        CommonSettingsBuilder {
+            common_settings: CommonSettings::default(),
+        }
+    }
+
+    pub fn default() -> CommonSettingsBuilder {
+        CommonSettingsBuilder {
+            common_settings: CommonSettings {
+                tracker_mode: Some(TrackerMode::Listed),
+                database: Some(DatabaseSettingsBuilder::default().database_settings),
+                announce_interval: Some(120),
+                min_announce_interval: Some(120),
+                max_peer_timeout: Some(900),
+                tracker_usage_statistics: Some(true),
+                persistent_torrent_completed_stat: Some(false),
+                inactive_peer_cleanup_interval: Some(600),
+                remove_peerless_torrents: Some(false),
+            },
+        }
+    }
+
+    pub fn import_old(&mut self, old_settings: &old_settings::Settings) {
+        if let Some(val) = old_settings.mode {
+            self.common_settings.tracker_mode = Some(val)
+        }
+
+        if old_settings.db_driver.is_some() | old_settings.db_path.is_some() {
+            if self.common_settings.database.is_none() {
+                self.common_settings.database = Some(DatabaseSettingsBuilder::empty().database_settings);
+            }
+
+            if let Some(val) = old_settings.db_driver.as_ref() {
+                self.common_settings.database.as_mut().unwrap().driver = Some(*val)
+            }
+
+            if let Some(val) = old_settings.db_path.as_ref() {
+                self.common_settings.database.as_mut().unwrap().path = Some(val.clone())
+            }
+        }
+
+        if let Some(val) = old_settings.announce_interval {
+            self.common_settings.announce_interval = Some(val)
+        }
+
+        if let Some(val) = old_settings.min_announce_interval {
+            self.common_settings.min_announce_interval = Some(val)
+        }
+
+        if let Some(val) = old_settings.max_peer_timeout {
+            self.common_settings.max_peer_timeout = Some(val)
+        }
+
+        if let Some(val) = old_settings.tracker_usage_statistics {
+            self.common_settings.tracker_usage_statistics = Some(val)
+        }
+
+        if let Some(val) = old_settings.persistent_torrent_completed_stat {
+            self.common_settings.persistent_torrent_completed_stat = Some(val)
+        }
+
+        if let Some(val) = old_settings.inactive_peer_cleanup_interval {
+            self.common_settings.inactive_peer_cleanup_interval = Some(val)
+        }
+
+        if let Some(val) = old_settings.remove_peerless_torrents {
+            self.common_settings.remove_peerless_torrents = Some(val)
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Default, Hash)]
+pub struct DatabaseSettings {
+    pub driver: Option<DatabaseDrivers>,
+    pub path: Option<String>,
+}
+
+pub struct DatabaseSettingsBuilder {
+    pub database_settings: DatabaseSettings,
+}
+
+impl DatabaseSettingsBuilder {
+    pub fn empty() -> DatabaseSettingsBuilder {
+        DatabaseSettingsBuilder {
+            database_settings: DatabaseSettings::default(),
+        }
+    }
+    pub fn default() -> DatabaseSettingsBuilder {
+        DatabaseSettingsBuilder {
+            database_settings: DatabaseSettings {
+                driver: Some(DatabaseDrivers::Sqlite3),
+                path: Some("data.db".to_string()),
+            },
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Default, Hash)]
+pub struct ServiceSetting {
+    pub enabled: Option<bool>,
+    pub display_name: Option<String>,
+    pub service: Option<ServiceProtocol>,
+    pub socket: Option<String>,
+    pub tls: Option<TlsSettings>,
+    pub access_tokens: Option<BTreeMap<String, String>>,
+}
+
+pub struct ServicesBuilder {
+    pub services: BTreeMap<String, ServiceSetting>,
+}
+
+impl From<BTreeMap<String, ServiceSetting>> for ServicesBuilder {
+    fn from(services: BTreeMap<String, ServiceSetting>) -> Self {
+        ServicesBuilder { services }
+    }
+}
+
+impl ServicesBuilder {
+    pub fn empty() -> ServicesBuilder {
+        ServicesBuilder {
+            services: BTreeMap::new(),
+        }
+    }
+    pub fn default() -> ServicesBuilder {
+        let mut access_tokens = BTreeMap::new();
+        access_tokens.insert("admin".to_string(), "password".to_string());
+
+        let api = ServiceSetting {
+            enabled: Some(false),
+            display_name: Some("HTTP API (default)".to_string()),
+            service: Some(ServiceProtocol::API),
+            socket: Some("127.0.0.1:1212".to_string()),
+            tls: None,
+            access_tokens: Some(access_tokens),
+        };
+
+        let udp = ServiceSetting {
+            enabled: Some(false),
+            display_name: Some("UDP (default)".to_string()),
+            service: Some(ServiceProtocol::UDP),
+            socket: Some("0.0.0.0:6969".to_string()),
+            tls: None,
+            access_tokens: None,
+        };
+
+        let http = ServiceSetting {
+            enabled: Some(false),
+            display_name: Some("HTTP (default)".to_string()),
+            service: Some(ServiceProtocol::HTTP),
+            socket: Some("0.0.0.0:6969".to_string()),
+            tls: None,
+            access_tokens: None,
+        };
+
+        let tls = ServiceSetting {
+            enabled: Some(false),
+            display_name: Some("TLS (default)".to_string()),
+            service: Some(ServiceProtocol::HTTP),
+            socket: Some("0.0.0.0:6969".to_string()),
+            tls: Some(TlsSettings {
+                certificate_file_path: Some("".to_string()),
+                key_file_path: Some("".to_string()),
+            }),
+            access_tokens: None,
+        };
+
+        let mut services = BTreeMap::new();
+
+        services.insert("default_api".to_string(), api);
+        services.insert("default_udp".to_string(), udp);
+        services.insert("default_http".to_string(), http);
+        services.insert("default_tls".to_string(), tls);
+
+        ServicesBuilder { services }
+    }
+
+    pub fn import_old(&mut self, old_settings: &old_settings::Settings) {
+        let existing_service_map = self.services.clone();
+        let existing_services: HashSet<&ServiceSetting, RandomState> = HashSet::from_iter(existing_service_map.values());
+
+        let mut new_values: HashSet<(ServiceSetting, String)> = HashSet::new();
+
+        if let Some(api) = old_settings.http_api.as_ref() {
+            new_values.insert((
+                ServiceSetting {
+                    enabled: api.enabled,
+                    display_name: Some("HTTP API (imported)".to_string()),
+                    service: Some(ServiceProtocol::API),
+                    socket: api.bind_address.clone(),
+                    tls: None,
+                    access_tokens: api.access_tokens.clone(),
+                },
+                "api_imported".to_string(),
+            ));
+        };
+
+        if let Some(udp) = old_settings.udp_trackers.as_ref() {
+            for service in udp {
+                new_values.insert((
+                    ServiceSetting {
+                        enabled: service.enabled,
+                        display_name: Some("UDP Service (imported)".to_string()),
+                        service: Some(ServiceProtocol::UDP),
+                        socket: service.bind_address.clone(),
+                        tls: None,
+                        access_tokens: None,
+                    },
+                    "udp_imported".to_string(),
+                ));
+            }
+        };
+
+        if let Some(http_or_tls) = old_settings.http_trackers.as_ref() {
+            for service in http_or_tls {
+                new_values.insert(if service.ssl_enabled.unwrap_or_default() {
+                    (
+                        ServiceSetting {
+                            enabled: service.enabled,
+                            display_name: Some("HTTP Service(imported)".to_string()),
+                            service: Some(ServiceProtocol::HTTP),
+                            socket: service.bind_address.clone(),
+                            tls: None,
+                            access_tokens: None,
+                        },
+                        "http_imported".to_string(),
+                    )
+                } else {
+                    (
+                        ServiceSetting {
+                            enabled: service.enabled,
+                            display_name: Some("TLS Service (imported)".to_string()),
+                            service: Some(ServiceProtocol::TLS),
+                            socket: service.bind_address.clone(),
+                            tls: Some(TlsSettings {
+                                certificate_file_path: service.ssl_cert_path.clone(),
+                                key_file_path: service.ssl_key_path.clone(),
+                            }),
+                            access_tokens: None,
+                        },
+                        "tls_imported".to_string(),
+                    )
+                });
+            }
+        };
+
+        for (value, name) in new_values {
+            // Lets not import something we already have...
+            if !existing_services.contains(&value) {
+                for count in 0.. {
+                    let key = format!("{name}_{count}");
+                    if let Vacant(e) = self.services.entry(key) {
+                        e.insert(value.clone());
+                        break;
+                    } else {
+                        continue;
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Hash)]
+pub struct TlsSettings {
+    pub certificate_file_path: Option<String>,
+    pub key_file_path: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Copy, Clone, Hash)]
+pub enum LogFilterLevel {
+    Off,
+    Error,
+    Warn,
+    Info,
+    Debug,
+    Trace,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Copy, Clone, Hash)]
+pub enum ServiceProtocol {
+    UDP,
+    HTTP,
+    TLS,
+    API,
 }
 
 #[derive(Debug)]
@@ -79,7 +508,7 @@ pub enum ConfigurationError {
     RenameFailedError { error: String },
 }
 
-impl Settings {
+impl old_settings::Settings {
     pub fn default() -> Result<Self, ConfigurationError> {
         let default_source = Path::new(CONFIG_FOLDER).join(CONFIG_DEFAULT);
         let mut sources: Vec<PathBuf> = Vec::new();
@@ -197,21 +626,7 @@ impl Settings {
     }
 
     fn write(&self, destination: &Path) -> Result<(), ConfigurationError> {
-        let mut settings = &mut self.clone();
-
-        settings.http_tracker = match settings.http_trackers.as_ref() {
-            Some(trackers) => {
-                let mut http_tracker_map: HashMap<String, HttpTrackerConfig> = HashMap::new();
-
-                for (count, tracker) in trackers.iter().enumerate() {
-                    http_tracker_map.insert(count.to_string(), tracker.clone());
-                }
-                Some(http_tracker_map)
-            }
-            None => None,
-        };
-
-        settings.http_trackers = None;
+        let settings = &mut self.clone();
 
         let toml_string = match toml::to_string(settings) {
             Ok(s) => s,
@@ -227,13 +642,75 @@ impl Settings {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
     use std::path::Path;
     use std::{env, fs};
 
+    use config::Config;
     use uuid::Uuid;
 
-    use crate::config_const::{CONFIG_FOLDER, CONFIG_LOCAL};
-    use crate::settings::Settings;
+    use super::{TrackerSettings, TrackerSettingsBuilder};
+    use crate::config_const::{CONFIG_DEFAULT, CONFIG_FOLDER, CONFIG_LOCAL};
+    use crate::settings::old_settings::Settings;
+
+    #[test]
+    fn write_test_configuration() {
+        let local_source = Path::new(CONFIG_FOLDER).join(CONFIG_DEFAULT);
+        let json_string = serde_json::to_string_pretty(&TrackerSettingsBuilder::default().settings).unwrap();
+
+        fs::write(local_source.with_extension("new.json"), json_string).unwrap()
+    }
+
+    #[test]
+    fn default_config_should_roundtrip() {
+        let term_dir = env::temp_dir();
+        let default_settings = &TrackerSettingsBuilder::default().settings;
+        let settings_json = serde_json::to_string_pretty(default_settings).unwrap();
+
+        let mut hasher = DefaultHasher::new();
+        settings_json.hash(&mut hasher);
+        let temp_file_path = &term_dir.join(format!("test-{}", hasher.finish())).with_extension("json");
+
+        fs::write(temp_file_path, settings_json).unwrap();
+
+        let settings2: TrackerSettings = Config::builder()
+            .add_source(config::File::from(temp_file_path.as_path()))
+            .build()
+            .unwrap()
+            .try_deserialize()
+            .unwrap();
+
+        assert_eq!(default_settings, &settings2);
+    }
+
+    #[test]
+    fn load_old_settings() {
+        let old_settings = Settings::default().unwrap();
+
+        let mut new_settings_builder = TrackerSettingsBuilder::from(TrackerSettings::default());
+
+        new_settings_builder.import_old(&old_settings);
+
+        let local_source = Path::new(CONFIG_FOLDER).join(CONFIG_LOCAL);
+        let json_string = serde_json::to_string_pretty(&new_settings_builder.settings).unwrap();
+
+        fs::write(local_source.with_extension("new.json"), json_string).unwrap()
+    }
+
+    #[test]
+    fn load_old_settings_into_default() {
+        let old_settings = Settings::default().unwrap();
+
+        let mut new_settings_builder = TrackerSettingsBuilder::default();
+
+        new_settings_builder.import_old(&old_settings);
+
+        let local_source = Path::new(CONFIG_FOLDER).join(CONFIG_LOCAL);
+        let json_string = serde_json::to_string_pretty(&new_settings_builder.settings).unwrap();
+
+        fs::write(local_source.with_extension("default.json"), json_string).unwrap()
+    }
 
     #[test]
     fn default_settings_should_contain_an_external_ip() {

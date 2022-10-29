@@ -5,8 +5,8 @@ use std::sync::Arc;
 use log::{error, info, warn};
 use tokio::task::JoinHandle;
 
-use crate::errors::{FilePathError, ServerConfigError, ServerError, TlsConfigError};
-use crate::settings::HttpTrackerConfig;
+use crate::errors::{FilePathError, ServerError, ServiceConfigError, TlsConfigError};
+use crate::settings::old_settings::HttpTrackerConfig;
 use crate::tracker::tracker::TorrentTracker;
 use crate::{HttpServer, HttpServerSettings, TlsSettings};
 
@@ -78,10 +78,10 @@ fn get_tracker_settings(config: &HttpTrackerConfig) -> Result<Option<HttpServerS
         }
     };
 
-    let tls_config = if config.tls_enabled.unwrap_or_default() {
+    let tls_config = if config.ssl_enabled.unwrap_or_default() {
         match get_tls_config(
-            config.tls_cert_path.as_ref().unwrap_or(empty_string),
-            config.tls_key_path.as_ref().unwrap_or(empty_string),
+            config.ssl_cert_path.as_ref().unwrap_or(empty_string),
+            config.ssl_key_path.as_ref().unwrap_or(empty_string),
         ) {
             Ok(tls_config) => {
                 info!(
@@ -123,35 +123,35 @@ fn get_tracker_settings(config: &HttpTrackerConfig) -> Result<Option<HttpServerS
     }
 }
 
-fn handel_server_config_error(error: &ServerConfigError, server_type: &String, server_name: &Option<String>) -> ServerError {
+fn handel_server_config_error(error: &ServiceConfigError, server_type: &String, server_name: &Option<String>) -> ServerError {
     let unnamed = &"UNNAMED".to_string();
 
     match error {
-        ServerConfigError::UnnamedServer => {
-            let message = format!("\"{}\", {}", server_type, ServerConfigError::UnnamedServer);
+        ServiceConfigError::UnnamedServer => {
+            let message = format!("\"{}\", {}", server_type, ServiceConfigError::UnnamedServer);
             ServerError::ConfigurationError {
                 message,
                 source: error.clone(),
             }
         }
-        ServerConfigError::BindingAddressIsEmpty => {
+        ServiceConfigError::BindingAddressIsEmpty => {
             let message = format!(
                 "\"{}\", \"{}\", {}",
                 server_type,
                 server_name.as_ref().unwrap_or(unnamed),
-                ServerConfigError::BindingAddressIsEmpty
+                ServiceConfigError::BindingAddressIsEmpty
             );
             ServerError::ConfigurationError {
                 message,
                 source: error.clone(),
             }
         }
-        ServerConfigError::BindingAddressBadSyntax { input, source } => {
+        ServiceConfigError::BindingAddressBadSyntax { input, source } => {
             let message = format!(
                 "Error: \"{}\", \"{}\", {}.",
                 server_type,
                 server_name.as_ref().unwrap_or(unnamed),
-                ServerConfigError::BindingAddressBadSyntax {
+                ServiceConfigError::BindingAddressBadSyntax {
                     input: input.clone(),
                     source: source.clone()
                 },
@@ -162,12 +162,12 @@ fn handel_server_config_error(error: &ServerConfigError, server_type: &String, s
             }
         }
 
-        ServerConfigError::BadHttpTlsConfig { source } => {
+        ServiceConfigError::BadHttpTlsConfig { source } => {
             let message = format!(
                 "Error: \"{}\", \"{}\", {}.",
                 server_type,
                 server_name.as_ref().unwrap_or(unnamed),
-                ServerConfigError::BadHttpTlsConfig { source: source.clone() },
+                ServiceConfigError::BadHttpTlsConfig { source: source.clone() },
             );
             ServerError::ConfigurationError {
                 message,
@@ -177,36 +177,36 @@ fn handel_server_config_error(error: &ServerConfigError, server_type: &String, s
     }
 }
 
-fn handel_http_tls_config_error(error: &TlsConfigError) -> ServerConfigError {
+fn handel_http_tls_config_error(error: &TlsConfigError) -> ServiceConfigError {
     match error {
-        TlsConfigError::BadCertificateFilePath { source } => ServerConfigError::BadHttpTlsConfig {
+        TlsConfigError::BadCertificateFilePath { source } => ServiceConfigError::BadHttpTlsConfig {
             source: TlsConfigError::BadCertificateFilePath { source: source.clone() },
         },
-        TlsConfigError::BadKeyFilePath { source } => ServerConfigError::BadHttpTlsConfig {
+        TlsConfigError::BadKeyFilePath { source } => ServiceConfigError::BadHttpTlsConfig {
             source: TlsConfigError::BadKeyFilePath { source: source.clone() },
         },
     }
 }
 
-fn get_name(name: &String) -> Result<String, ServerConfigError> {
+fn get_name(name: &String) -> Result<String, ServiceConfigError> {
     if !name.is_empty() {
         Ok(name.clone())
     } else {
-        Err(ServerConfigError::UnnamedServer)
+        Err(ServiceConfigError::UnnamedServer)
     }
 }
 
-fn get_socket(bind_addr: &String) -> Result<SocketAddr, ServerConfigError> {
+fn get_socket(bind_addr: &String) -> Result<SocketAddr, ServiceConfigError> {
     if !bind_addr.is_empty() {
         match bind_addr.parse::<SocketAddr>() {
             Ok(socket) => Ok(socket),
-            Err(source) => Err(ServerConfigError::BindingAddressBadSyntax {
+            Err(source) => Err(ServiceConfigError::BindingAddressBadSyntax {
                 input: bind_addr.to_string(),
                 source,
             }),
         }
     } else {
-        Err(ServerConfigError::BindingAddressIsEmpty)
+        Err(ServiceConfigError::BindingAddressIsEmpty)
     }
 }
 

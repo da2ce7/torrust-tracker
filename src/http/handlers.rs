@@ -85,8 +85,8 @@ pub async fn handle_announce(
         &announce_request,
         torrent_stats,
         peers,
-        announce_interval,
-        tracker.settings.min_announce_interval,
+        announce_interval.unwrap(),
+        tracker.settings.min_announce_interval.unwrap(),
     )
 }
 

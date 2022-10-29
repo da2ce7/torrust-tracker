@@ -1,5 +1,5 @@
 use std::cmp::min;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -56,7 +56,7 @@ enum ActionStatus<'a> {
 
 impl warp::reject::Reject for ActionStatus<'static> {}
 
-fn authenticate(tokens: HashMap<String, String>) -> impl Filter<Extract = (), Error = warp::reject::Rejection> + Clone {
+fn authenticate(tokens: BTreeMap<String, String>) -> impl Filter<Extract = (), Error = warp::reject::Rejection> + Clone {
     #[derive(Deserialize)]
     struct AuthToken {
         token: Option<String>,
@@ -349,7 +349,17 @@ pub fn start(socket_addr: SocketAddr, tracker: Arc<TorrentTracker>) -> impl warp
             .or(reload_keys),
     );
 
-    let server = api_routes.and(authenticate(tracker.settings.http_api.access_tokens.clone()));
+    let server = api_routes.and(authenticate(
+        tracker
+            .settings
+            .http_api
+            .as_ref()
+            .unwrap()
+            .access_tokens
+            .as_ref()
+            .unwrap()
+            .clone(),
+    ));
 
     let (_addr, api_server) = serve(server).bind_with_graceful_shutdown(socket_addr, async move {
         tokio::signal::ctrl_c().await.expect("Failed to listen to shutdown signal.");

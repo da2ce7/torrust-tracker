@@ -3,7 +3,7 @@ use std::sync::Once;
 
 use log::{info, LevelFilter};
 
-use crate::settings::Settings;
+use crate::settings::old_settings::Settings;
 
 static INIT: Once = Once::new();
 

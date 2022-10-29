@@ -37,13 +37,13 @@ pub enum ServerError {
     InvalidConnectionCookie,
 
     #[error("bad server configuration")]
-    ConfigurationError { message: String, source: ServerConfigError },
+    ConfigurationError { message: String, source: ServiceConfigError },
 }
 
 impl Reject for ServerError {}
 
 #[derive(Error, Debug, Clone)]
-pub enum ServerConfigError {
+pub enum ServiceConfigError {
     #[error("This Server is Unamed!")]
     UnnamedServer,
 

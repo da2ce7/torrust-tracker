@@ -3,7 +3,7 @@ use std::sync::Arc;
 use log::{error, info, warn};
 use tokio::task::JoinHandle;
 
-use crate::settings::UdpTrackerConfig;
+use crate::settings::old_settings::UdpTrackerConfig;
 use crate::tracker::tracker::TorrentTracker;
 use crate::UdpServer;
 

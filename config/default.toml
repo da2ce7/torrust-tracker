@@ -19,29 +19,21 @@ persistent_torrent_completed_stat = false
 inactive_peer_cleanup_interval = 600
 remove_peerless_torrents = true
 
-#
-#[[udp_trackers]]
-#enabled = false
-#bind_address = "0.0.0.0:6969"
+[[udp_trackers]]
+enabled = true
+bind_address = "0.0.0.0:6969"
 
 [[http_trackers]]
-enabled = false
+enabled = true
 bind_address = "0.0.0.0:6969"
 ssl_enabled = false
 ssl_cert_path = ""
 ssl_key_path = ""
 
-
-[udp_tracker.name]
-
-
-[http_tracker.name]
-
-
-
 [http_api]
-enabled = false
+enabled = true
 bind_address = "127.0.0.1:1212"
 
 [http_api.access_tokens]
 admin = "MyAccessToken"
+

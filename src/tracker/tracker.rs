@@ -12,7 +12,7 @@ use crate::databases::database::Database;
 use crate::mode::TrackerMode;
 use crate::peer::TorrentPeer;
 use crate::protocol::common::InfoHash;
-use crate::settings::Settings;
+use crate::settings::old_settings::Settings;
 use crate::statistics::{TrackerStatistics, TrackerStatisticsEvent, TrackerStatsService};
 use crate::tracker::key;
 use crate::tracker::key::AuthKey;
@@ -30,11 +30,11 @@ pub struct TorrentTracker {
 
 impl TorrentTracker {
     pub fn new(settings: Arc<Settings>, stats_tracker: Box<dyn TrackerStatsService>) -> Result<TorrentTracker, r2d2::Error> {
-        let database = database::connect_database(settings.db_driver.as_ref().unwrap(), &settings.db_path)?;
+        let database = database::connect_database(settings.db_driver.as_ref().unwrap(), &settings.db_path.as_ref().unwrap())?;
 
         Ok(TorrentTracker {
             settings: settings.clone(),
-            mode: settings.mode,
+            mode: settings.mode.unwrap(),
             keys: RwLock::new(std::collections::HashMap::new()),
             whitelist: RwLock::new(std::collections::HashSet::new()),
             torrents: RwLock::new(std::collections::BTreeMap::new()),
@@ -211,7 +211,7 @@ impl TorrentTracker {
         let stats_updated = torrent_entry.update_peer(peer);
 
         // todo: move this action to a separate worker
-        if self.settings.persistent_torrent_completed_stat && stats_updated {
+        if self.settings.persistent_torrent_completed_stat.unwrap() && stats_updated {
             let _ = self
                 .database
                 .save_persistent_torrent(&info_hash, torrent_entry.completed)
@@ -244,18 +244,18 @@ impl TorrentTracker {
         let mut torrents_lock = self.torrents.write().await;
 
         // If we don't need to remove torrents we will use the faster iter
-        if self.settings.remove_peerless_torrents {
+        if self.settings.remove_peerless_torrents.unwrap() {
             torrents_lock.retain(|_, torrent_entry| {
-                torrent_entry.remove_inactive_peers(self.settings.max_peer_timeout);
+                torrent_entry.remove_inactive_peers(self.settings.max_peer_timeout.unwrap());
 
-                match self.settings.persistent_torrent_completed_stat {
+                match self.settings.persistent_torrent_completed_stat.unwrap() {
                     true => torrent_entry.completed > 0 || torrent_entry.peers.len() > 0,
                     false => torrent_entry.peers.len() > 0,
                 }
             });
         } else {
             for (_, torrent_entry) in torrents_lock.iter_mut() {
-                torrent_entry.remove_inactive_peers(self.settings.max_peer_timeout);
+                torrent_entry.remove_inactive_peers(self.settings.max_peer_timeout.unwrap());
             }
         }
     }
