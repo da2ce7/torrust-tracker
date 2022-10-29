@@ -24,38 +24,48 @@ pub async fn setup(settings: &Settings, tracker: Arc<TorrentTracker>) -> Vec<Joi
     }
 
     // Start the UDP blocks
-    for udp_tracker_settings in &settings.udp_trackers {
-        if !udp_tracker_settings.enabled.unwrap_or_default() {
-            continue;
-        }
+    match settings.udp_trackers.as_ref() {
+        Some(trackers) => {
+            for udp_tracker_settings in trackers {
+                if !udp_tracker_settings.enabled.unwrap_or_default() {
+                    continue;
+                }
 
-        if tracker.is_private() {
-            warn!(
-                "Could not start UDP tracker on: {} while in {:?}. UDP is not safe for private trackers!",
-                udp_tracker_settings.bind_address.clone().unwrap(),
-                settings.mode
-            );
-        } else {
-            jobs.push(udp_tracker::start_job(&udp_tracker_settings, tracker.clone()))
+                if tracker.is_private() {
+                    warn!(
+                        "Could not start UDP tracker on: {} while in {:?}. UDP is not safe for private trackers!",
+                        udp_tracker_settings.bind_address.clone().unwrap(),
+                        settings.mode
+                    );
+                } else {
+                    jobs.push(udp_tracker::start_job(udp_tracker_settings, tracker.clone()))
+                }
+            }
         }
+        None => {}
     }
 
     // Start the HTTP blocks
-    for http_tracker_settings in &settings.http_trackers {
-        if !http_tracker_settings.enabled.unwrap_or_default() {
-            continue;
+    match settings.http_trackers.as_ref() {
+        Some(trackers) => {
+            for http_tracker_settings in trackers {
+                if !http_tracker_settings.enabled.unwrap_or_default() {
+                    continue;
+                }
+                jobs.push(http_tracker::start_job(http_tracker_settings, tracker.clone()));
+            }
         }
-        jobs.push(http_tracker::start_job(&http_tracker_settings, tracker.clone()));
+        None => {}
     }
 
     // Start HTTP API server
     if settings.http_api.enabled {
-        jobs.push(tracker_api::start_job(&settings, tracker.clone()));
+        jobs.push(tracker_api::start_job(settings, tracker.clone()));
     }
 
     // Remove torrents without peers, every interval
     if settings.inactive_peer_cleanup_interval > 0 {
-        jobs.push(torrent_cleanup::start_job(&settings, tracker.clone()));
+        jobs.push(torrent_cleanup::start_job(settings, tracker.clone()));
     }
 
     jobs

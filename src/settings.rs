@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use config::{Config, ConfigError, File};
 use log::info;
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, NoneAsEmptyString};
+use serde_with::serde_as;
 
 use crate::config_const::{CONFIG_DEFAULT, CONFIG_FOLDER, CONFIG_LOCAL, CONFIG_OLD_LOCAL, CONFIG_OVERRIDE};
 use crate::databases::database::DatabaseDrivers;
@@ -22,28 +22,19 @@ fn mk_empty() -> Option<String> {
 #[serde_as]
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct UdpTrackerConfig {
-    #[serde(default = "mk_empty")]
-    pub name: Option<String>,
-    #[serde(default = "mk_false")]
+    pub display_name: Option<String>,
     pub enabled: Option<bool>,
-    #[serde(default = "mk_empty")]
     pub bind_address: Option<String>,
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Default)]
 pub struct HttpTrackerConfig {
-    #[serde(default = "mk_empty")]
     pub display_name: Option<String>,
-    #[serde(default = "mk_false")]
     pub enabled: Option<bool>,
-    #[serde(default = "mk_empty")]
     pub bind_address: Option<String>,
-    #[serde(default = "mk_false")]
     pub tls_enabled: Option<bool>,
-    #[serde(default = "mk_empty")]
     pub tls_cert_path: Option<String>,
-    #[serde(default = "mk_empty")]
     pub tls_key_path: Option<String>,
 }
 
@@ -59,7 +50,7 @@ pub struct HttpApiConfig {
 pub struct Settings {
     pub log_level: Option<String>,
     pub mode: TrackerMode,
-    pub db_driver: DatabaseDrivers,
+    pub db_driver: Option<DatabaseDrivers>,
     pub db_path: String,
     pub announce_interval: u32,
     pub min_announce_interval: u32,
@@ -103,7 +94,7 @@ impl Settings {
         Self::migrate_old_config()?;
 
         let sources = Self::get_sources()?;
-        let mut settings = Self::load(&sources)?;
+        let settings = Self::load(&sources)?;
 
         settings.write(&local_source)?;
 
@@ -133,7 +124,7 @@ impl Settings {
             sources.push(old_local_source.clone())
         }
 
-        let mut settings = Self::load(&sources)?;
+        let settings = Self::load(&sources)?;
         settings.write(&local_source)?;
 
         match fs::rename(
@@ -206,16 +197,23 @@ impl Settings {
     }
 
     fn write(&self, destination: &Path) -> Result<(), ConfigurationError> {
-        let htt = self.http_trackers.first().unwrap();
+        let mut settings = &mut self.clone();
 
-        let mut hte: HashMap<String, HttpTrackerConfig> = HashMap::new();
+        settings.http_tracker = match settings.http_trackers.as_ref() {
+            Some(trackers) => {
+                let mut http_tracker_map: HashMap<String, HttpTrackerConfig> = HashMap::new();
 
-        hte.insert("test".to_string(), htt.clone());
-        hte.insert("test2".to_string(), htt.clone());
+                for (count, tracker) in trackers.iter().enumerate() {
+                    http_tracker_map.insert(count.to_string(), tracker.clone());
+                }
+                Some(http_tracker_map)
+            }
+            None => None,
+        };
 
-        self.http_trackers_b = Some(hte);
+        settings.http_trackers = None;
 
-        let toml_string = match toml::to_string(self) {
+        let toml_string = match toml::to_string(settings) {
             Ok(s) => s,
             Err(e) => return Err(ConfigurationError::EncodeError { error: e }),
         };
@@ -258,7 +256,7 @@ mod tests {
     fn configuration_should_be_saved_in_a_toml_config_file() {
         let temp_config_path = env::temp_dir().as_path().join(format!("test_config_{}.toml", Uuid::new_v4()));
 
-        let mut settings = Settings::default().unwrap();
+        let settings = Settings::default().unwrap();
 
         settings
             .write(temp_config_path.as_ref())

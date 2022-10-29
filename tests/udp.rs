@@ -25,10 +25,10 @@ mod udp_tracker_server {
     use torrust_tracker::{logging, static_time};
 
     fn tracker_settings() -> Arc<Settings> {
-        let mut settings = Settings::default().unwrap();
+        let mut settings = &mut Settings::default().unwrap();
         settings.log_level = Some("off".to_owned());
-        settings.udp_trackers[0].bind_address = Some(format!("127.0.0.1:{}", ephemeral_random_port()));
-        Arc::new(settings)
+        settings.udp_trackers.as_ref().unwrap()[0].bind_address = Some(format!("127.0.0.1:{}", ephemeral_random_port()));
+        Arc::new(settings.clone())
     }
 
     pub struct UdpServer {
@@ -65,7 +65,7 @@ mod udp_tracker_server {
                 // Initialize logging
                 logging::setup_logging(&settings);
 
-                let udp_tracker_settings = &settings.udp_trackers[0];
+                let udp_tracker_settings = &settings.udp_trackers.as_ref().unwrap()[0];
 
                 // Start the UDP tracker job
                 self.job = Some(udp_tracker::start_job(&udp_tracker_settings, tracker.clone()));

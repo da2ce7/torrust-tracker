@@ -30,7 +30,7 @@ pub struct TorrentTracker {
 
 impl TorrentTracker {
     pub fn new(settings: Arc<Settings>, stats_tracker: Box<dyn TrackerStatsService>) -> Result<TorrentTracker, r2d2::Error> {
-        let database = database::connect_database(&settings.db_driver, &settings.db_path)?;
+        let database = database::connect_database(settings.db_driver.as_ref().unwrap(), &settings.db_path)?;
 
         Ok(TorrentTracker {
             settings: settings.clone(),
