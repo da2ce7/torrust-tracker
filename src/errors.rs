@@ -42,6 +42,15 @@ pub enum ServerError {
 
 impl Reject for ServerError {}
 
+#[derive(Error, Debug)]
+pub enum SettingsError {
+    #[error("Non-Optional Field is missing! \"{message}\"")]
+    MissingFieldError { message: String },
+
+    #[error("Non-Optional Field: is empty! \"{message}\"")]
+    EmptyFieldError { message: String },
+}
+
 #[derive(Error, Debug, Clone)]
 pub enum ServiceConfigError {
     #[error("This Server is Unamed!")]
