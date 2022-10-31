@@ -2,26 +2,47 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use crate::errors::ServiceSettingsError;
 use crate::http::routes;
+use crate::settings::ServiceSetting;
 use crate::tracker::tracker::TorrentTracker;
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct HttpServiceSettings {
+    pub id: String,
+    pub display_name: String,
+    pub socket: SocketAddr,
+}
+
+impl TryFrom<(&String, &ServiceSetting)> for HttpServiceSettings {
+    type Error = ServiceSettingsError;
+
+    fn try_from(value: (&String, &ServiceSetting)) -> Result<Self, Self::Error> {
+        todo!()
+    }
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct TlsServiceSettings {
+    pub id: String,
+    pub display_name: String,
+    pub socket: SocketAddr,
+    pub certificate_file_path: PathBuf,
+    pub key_file_path: PathBuf,
+}
+
+impl TryFrom<(&String, &ServiceSetting)> for TlsServiceSettings {
+    type Error = ServiceSettingsError;
+
+    fn try_from(value: (&String, &ServiceSetting)) -> Result<Self, Self::Error> {
+        todo!()
+    }
+}
 
 /// Server that listens on HTTP, needs a TorrentTracker
 #[derive(Clone)]
 pub struct HttpServer {
     tracker: Arc<TorrentTracker>,
-}
-
-#[derive(Debug)]
-pub struct HttpServerSettings {
-    pub name: String,
-    pub socket: SocketAddr,
-    pub tls: Option<TlsSettings>,
-}
-
-#[derive(Debug, Clone)]
-pub struct TlsSettings {
-    pub cert_file_path: PathBuf,
-    pub key_file_path: PathBuf,
 }
 
 impl HttpServer {

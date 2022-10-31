@@ -5,15 +5,32 @@ use std::sync::Arc;
 use log::{error, info, warn};
 use tokio::task::JoinHandle;
 
-use crate::errors::{FilePathError, ServiceSettingsError, SettingsError, TlsConfigError};
+use crate::errors::{FilePathError, ServiceSettingsError, SettingsError, TlsSettingsError};
 use crate::settings::old_settings::HttpTrackerConfig;
 use crate::settings::ServiceSetting;
 use crate::tracker::tracker::TorrentTracker;
-use crate::{HttpServer, HttpServerSettings, TlsSettings};
+use crate::{HttpServer, HttpServiceSettings, TlsServiceSettings};
 
-pub fn start_job(config: &HttpTrackerConfig, tracker: Arc<TorrentTracker>) -> JoinHandle<()> {
-    let settings = get_tracker_settings(config).unwrap().unwrap();
+pub fn start_http_job(settings: &HttpServiceSettings, tracker: Arc<TorrentTracker>) -> JoinHandle<()> {
+    tokio::spawn(async move {
+        let http_tracker = HttpServer::new(tracker);
 
+        match settings.tls {
+            Some(tls) => {
+                info!("Starting HTTP Server \"{}\" on: {} (TLS)", settings.name, settings.socket);
+                http_tracker
+                    .start_tls(settings.socket, tls.cert_file_path, tls.key_file_path)
+                    .await;
+            }
+            None => {
+                info!("Starting HTTP Server \"{}\" on: {}", settings.name, settings.socket);
+                http_tracker.start(settings.socket).await;
+            }
+        }
+    })
+}
+
+pub fn start_tls_job(settings: &TlsServiceSettings, tracker: Arc<TorrentTracker>) -> JoinHandle<()> {
     tokio::spawn(async move {
         let http_tracker = HttpServer::new(tracker);
 
@@ -124,23 +141,6 @@ fn get_tracker_settings(config: &HttpTrackerConfig) -> Result<Option<HttpServerS
     }
 }
 
-fn handel_http_tls_config_error(error: &TlsConfigError, id: &String, data: &ServiceSetting) -> ServiceSettingsError {
-    match error {
-        TlsConfigError::BadCertificateFilePath { source } => ServiceSettingsError::BadHttpTlsConfig {
-            id: id.to_owned(),
-            data: data.to_owned(),
-            source: TlsConfigError::BadCertificateFilePath {
-                source: source.to_owned(),
-            },
-        },
-        TlsConfigError::BadKeyFilePath { source } => ServiceSettingsError::BadHttpTlsConfig {
-            id: id.to_owned(),
-            data: data.to_owned(),
-            source: TlsConfigError::BadCertificateFilePath {
-                source: source.to_owned(),
-            },
-        },
-    }
 }
 
 fn get_name(name: &String) -> Result<String, ServiceSettingsError> {
@@ -165,15 +165,15 @@ fn get_socket(bind_addr: &String) -> Result<SocketAddr, ServiceSettingsError> {
     }
 }
 
-fn get_tls_config(tls_cert_path: &String, tls_key_path: &String) -> Result<TlsSettings, TlsConfigError> {
+fn get_tls_config(tls_cert_path: &String, tls_key_path: &String) -> Result<TlsSettings, TlsSettingsError> {
     let cert_file_path = match get_path(tls_cert_path) {
         Ok(path) => path,
-        Err(source) => return Err(TlsConfigError::BadCertificateFilePath { source }),
+        Err(source) => return Err(TlsSettingsError::BadCertificateFilePath { source }),
     };
 
     let key_file_path = match get_path(tls_key_path) {
         Ok(path) => path,
-        Err(source) => return Err(TlsConfigError::BadKeyFilePath { source }),
+        Err(source) => return Err(TlsSettingsError::BadKeyFilePath { source }),
     };
 
     Ok(TlsSettings {

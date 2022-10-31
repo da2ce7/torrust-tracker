@@ -11,6 +11,22 @@ use crate::peer::TorrentPeer;
 use crate::protocol::common::*;
 use crate::tracker::tracker::TorrentTracker;
 
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct ApiServiceSettings {
+    pub id: String,
+    pub display_name: String,
+    pub socket: SocketAddr,
+    pub access_tokens: BTreeMap<String, String>,
+}
+
+impl TryFrom<(&String, &ServiceSetting)> for ApiServiceSettings {
+    type Error = ServiceSettingsError;
+
+    fn try_from(value: (&String, &ServiceSetting)) -> Result<Self, Self::Error> {
+        todo!()
+    }
+}
+
 #[derive(Deserialize, Debug)]
 struct TorrentInfoQuery {
     offset: Option<u32>,

@@ -10,9 +10,9 @@ use tokio::sync::{RwLock, RwLockReadGuard};
 use crate::databases::database;
 use crate::databases::database::Database;
 use crate::mode::TrackerMode;
+use crate::old_settings::Settings;
 use crate::peer::TorrentPeer;
 use crate::protocol::common::InfoHash;
-use crate::settings::old_settings::Settings;
 use crate::statistics::{TrackerStatistics, TrackerStatisticsEvent, TrackerStatsService};
 use crate::tracker::key;
 use crate::tracker::key::AuthKey;
@@ -20,7 +20,8 @@ use crate::tracker::torrent::{TorrentEntry, TorrentError, TorrentStats};
 
 pub struct TorrentTracker {
     pub settings: Arc<Settings>,
-    mode: TrackerMode,
+    pub mode: TrackerMode,
+    pub torrent_cleanup_interval: u64,
     keys: RwLock<std::collections::HashMap<String, AuthKey>>,
     whitelist: RwLock<std::collections::HashSet<InfoHash>>,
     torrents: RwLock<std::collections::BTreeMap<InfoHash, TorrentEntry>>,

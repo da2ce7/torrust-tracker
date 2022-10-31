@@ -11,6 +11,7 @@ pub mod errors;
 pub mod http;
 pub mod jobs;
 pub mod logging;
+pub mod old_settings;
 pub mod protocol;
 pub mod settings;
 pub mod setup;

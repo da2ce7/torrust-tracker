@@ -9,6 +9,21 @@ use tokio::net::UdpSocket;
 use crate::tracker::tracker::TorrentTracker;
 use crate::udp::{handle_packet, MAX_PACKET_SIZE};
 
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct UdpServiceSettings {
+    pub id: String,
+    pub display_name: String,
+    pub socket: SocketAddr,
+}
+
+impl TryFrom<(&String, &ServiceSetting)> for UdpServiceSettings {
+    type Error = ServiceSettingsError;
+
+    fn try_from(value: (&String, &ServiceSetting)) -> Result<Self, Self::Error> {
+        todo!()
+    }
+}
+
 pub struct UdpServer {
     socket: Arc<UdpSocket>,
     tracker: Arc<TorrentTracker>,

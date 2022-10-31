@@ -5,9 +5,9 @@ use tokio::task::JoinHandle;
 
 use crate::settings::old_settings::UdpTrackerConfig;
 use crate::tracker::tracker::TorrentTracker;
-use crate::UdpServer;
+use crate::{UdpServer, UdpServiceSettings};
 
-pub fn start_job(settings: &UdpTrackerConfig, tracker: Arc<TorrentTracker>) -> JoinHandle<()> {
+pub fn start_job(settings: &UdpServiceSettings, tracker: Arc<TorrentTracker>) -> JoinHandle<()> {
     let bind_addr = settings.bind_address.clone();
 
     tokio::spawn(async move {

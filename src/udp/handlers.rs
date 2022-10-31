@@ -260,9 +260,9 @@ mod tests {
     use tokio::sync::{RwLock, RwLockReadGuard};
 
     use crate::mode::TrackerMode;
+    use crate::old_settings::Settings;
     use crate::peer::TorrentPeer;
     use crate::protocol::clock::{DefaultClock, Time};
-    use crate::settings::old_settings::Settings;
     use crate::statistics::{
         StatsTracker, TrackerStatistics, TrackerStatisticsEvent, TrackerStatisticsEventSender, TrackerStatisticsRepository,
         TrackerStatsService,

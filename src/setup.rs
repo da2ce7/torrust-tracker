@@ -1,13 +1,15 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use log::warn;
 use tokio::task::JoinHandle;
 
 use crate::jobs::{http_tracker, torrent_cleanup, tracker_api, udp_tracker};
-use crate::settings::old_settings::Settings;
+use crate::settings::Services;
 use crate::tracker::tracker::TorrentTracker;
+use crate::{HttpServiceSettings, UdpServiceSettings};
 
-pub async fn setup(settings: &Settings, tracker: Arc<TorrentTracker>) -> Vec<JoinHandle<()>> {
+pub async fn setup(services: &Services, tracker: Arc<TorrentTracker>) -> Vec<JoinHandle<()>> {
     let mut jobs: Vec<JoinHandle<()>> = Vec::new();
 
     // Load peer keys
@@ -23,46 +25,89 @@ pub async fn setup(settings: &Settings, tracker: Arc<TorrentTracker>) -> Vec<Joi
             .expect("Could not load whitelist from database.");
     }
 
-    // Start the UDP blocks
-    if let Some(trackers) = settings.udp_trackers.as_ref() {
-        for udp_tracker_settings in trackers {
-            if !udp_tracker_settings.enabled.unwrap_or_default() {
-                continue;
-            }
+    let mut udp_services: HashSet<UdpServiceSettings> = HashSet::new();
+    let mut http_services: HashSet<HttpServiceSettings> = HashSet::new();
+    let mut tls_services: HashSet<TlsServiceSettings> = HashSet::new();
+    let mut api_services: HashSet<ApiServiceSettings> = HashSet::new();
 
-            if tracker.is_private() {
-                warn!(
-                    "Could not start UDP tracker on: {} while in {:?}. UDP is not safe for private trackers!",
-                    udp_tracker_settings.bind_address.clone().unwrap(),
-                    settings.mode
-                );
-            } else {
-                jobs.push(udp_tracker::start_job(udp_tracker_settings, tracker.clone()))
+    for service in services
+        .into_iter()
+        .filter(|service| service.1.enabled.filter(|t| t.to_owned()).is_some())
+    {
+        // Re-Check Here
+        assert!(service.1.check().is_ok());
+
+        match service.1.service.unwrap() {
+            UDP => {
+                // Todo: Handel Error.
+                let service: UdpServiceSettings = service.try_into().unwrap();
+
+                // Todo: Handel Error. (no duplicates)
+                assert!(!udp_services.contains(&service));
+
+                udp_services.insert(service);
             }
+            HTTP => {
+                // Todo: Handel Error.
+                let service: HttpServiceSettings = service.try_into().unwrap();
+
+                // Todo: Handel Error. (no duplicates)
+                assert!(!http_services.contains(&service));
+
+                http_services.insert(service);
+            }
+            TLS => {
+                // Todo: Handel Error.
+                let service: TlsServiceSettings = service.try_into().unwrap();
+
+                // Todo: Handel Error. (no duplicates)
+                assert!(!tls_services.contains(&service));
+
+                tls_services.insert(service);
+            }
+            API => {
+                // Todo: Handel Error.
+                let service: ApiServiceSettings = service.try_into().unwrap();
+
+                // Todo: Handel Error. (no duplicates)
+                assert!(!api_services.contains(&service));
+
+                api_services.insert(service);
+            }
+        }
+    }
+
+    // Start the UDP blocks
+    for service_settings in udp_services {
+        if tracker.is_private() {
+            warn!(
+                "Could not start UDP tracker on: {} while in {:?}. UDP is not safe for private trackers!",
+                service_settings.socket.to_owned(),
+                tracker.mode
+            );
+        } else {
+            jobs.push(udp_tracker::start_job(&service_settings, tracker.clone()))
         }
     }
 
     // Start the HTTP blocks
-    if let Some(trackers) = settings.http_trackers.as_ref() {
-        for http_tracker_settings in trackers {
-            if !http_tracker_settings.enabled.unwrap_or_default() {
-                continue;
-            }
-            jobs.push(http_tracker::start_job(http_tracker_settings, tracker.clone()));
-        }
+    for service_settings in http_services {
+        jobs.push(http_tracker::start_http_job(&service_settings, tracker.clone()))
     }
 
-    if let Some(api) = settings.http_api.as_ref() {
-        if api.enabled.unwrap() {
-            jobs.push(tracker_api::start_job(settings, tracker.clone()));
-        }
+    // Start the TLS blocks
+    for service_settings in tls_services {
+        jobs.push(http_tracker::start_tls_job(&service_settings, tracker.clone()))
     }
 
-    // Start HTTP API server
+    // Start the API blocks
+    for service_settings in api_services {
+        jobs.push(tracker_api::start_job(&service_settings, tracker.clone()))
+    }
 
     // Remove torrents without peers, every interval
-    if settings.inactive_peer_cleanup_interval.unwrap() > 0 {
-        jobs.push(torrent_cleanup::start_job(settings, tracker.clone()));
+    if tracker.torrent_cleanup_interval > 0 {
+        jobs.push(torrent_cleanup::start_job(&tracker.torrent_cleanup_interval, tracker.clone()));
     }
 
     jobs
