@@ -5,8 +5,9 @@ use std::sync::Arc;
 use log::{error, info, warn};
 use tokio::task::JoinHandle;
 
-use crate::errors::{FilePathError, ServerError, ServiceConfigError, TlsConfigError};
+use crate::errors::{FilePathError, ServiceSettingsError, SettingsError, TlsConfigError};
 use crate::settings::old_settings::HttpTrackerConfig;
+use crate::settings::ServiceSetting;
 use crate::tracker::tracker::TorrentTracker;
 use crate::{HttpServer, HttpServerSettings, TlsSettings};
 
@@ -31,7 +32,7 @@ pub fn start_job(config: &HttpTrackerConfig, tracker: Arc<TorrentTracker>) -> Jo
     })
 }
 
-fn get_tracker_settings(config: &HttpTrackerConfig) -> Result<Option<HttpServerSettings>, ServerError> {
+fn get_tracker_settings(config: &HttpTrackerConfig) -> Result<Option<HttpServerSettings>, SettingsError> {
     let empty_string = &"".to_string();
     let is_enabled = config.enabled.unwrap_or_default();
 
@@ -43,7 +44,7 @@ fn get_tracker_settings(config: &HttpTrackerConfig) -> Result<Option<HttpServerS
             Some(name)
         }
         Err(error) => {
-            let server_error = handel_server_config_error(&error, &http_server, &None);
+            let server_error = error.handel();
 
             if !is_enabled {
                 warn!("Warning: {}.", server_error.to_string());
@@ -66,7 +67,7 @@ fn get_tracker_settings(config: &HttpTrackerConfig) -> Result<Option<HttpServerS
             Some(socket)
         }
         Err(error) => {
-            let server_error = handel_server_config_error(&error, &http_server, &name);
+            let server_error = error.handel();
 
             if !is_enabled {
                 warn!("Warning: {}.", server_error.to_string());
@@ -97,7 +98,7 @@ fn get_tracker_settings(config: &HttpTrackerConfig) -> Result<Option<HttpServerS
                 Some(tls_config)
             }
             Err(error) => {
-                let server_error = handel_server_config_error(&handel_http_tls_config_error(&error), &http_server, &name);
+                let server_error = handel_http_tls_config_error(&error, &"ttest".to_owned(), &ServiceSetting::default());
 
                 if !is_enabled {
                     warn!("Warning: {}.", server_error.to_string());
@@ -123,90 +124,44 @@ fn get_tracker_settings(config: &HttpTrackerConfig) -> Result<Option<HttpServerS
     }
 }
 
-fn handel_server_config_error(error: &ServiceConfigError, server_type: &String, server_name: &Option<String>) -> ServerError {
-    let unnamed = &"UNNAMED".to_string();
-
+fn handel_http_tls_config_error(error: &TlsConfigError, id: &String, data: &ServiceSetting) -> ServiceSettingsError {
     match error {
-        ServiceConfigError::UnnamedServer => {
-            let message = format!("\"{}\", {}", server_type, ServiceConfigError::UnnamedServer);
-            ServerError::ConfigurationError {
-                message,
-                source: error.clone(),
-            }
-        }
-        ServiceConfigError::BindingAddressIsEmpty => {
-            let message = format!(
-                "\"{}\", \"{}\", {}",
-                server_type,
-                server_name.as_ref().unwrap_or(unnamed),
-                ServiceConfigError::BindingAddressIsEmpty
-            );
-            ServerError::ConfigurationError {
-                message,
-                source: error.clone(),
-            }
-        }
-        ServiceConfigError::BindingAddressBadSyntax { input, source } => {
-            let message = format!(
-                "Error: \"{}\", \"{}\", {}.",
-                server_type,
-                server_name.as_ref().unwrap_or(unnamed),
-                ServiceConfigError::BindingAddressBadSyntax {
-                    input: input.clone(),
-                    source: source.clone()
-                },
-            );
-            ServerError::ConfigurationError {
-                message,
-                source: error.clone(),
-            }
-        }
-
-        ServiceConfigError::BadHttpTlsConfig { source } => {
-            let message = format!(
-                "Error: \"{}\", \"{}\", {}.",
-                server_type,
-                server_name.as_ref().unwrap_or(unnamed),
-                ServiceConfigError::BadHttpTlsConfig { source: source.clone() },
-            );
-            ServerError::ConfigurationError {
-                message,
-                source: error.clone(),
-            }
-        }
-    }
-}
-
-fn handel_http_tls_config_error(error: &TlsConfigError) -> ServiceConfigError {
-    match error {
-        TlsConfigError::BadCertificateFilePath { source } => ServiceConfigError::BadHttpTlsConfig {
-            source: TlsConfigError::BadCertificateFilePath { source: source.clone() },
+        TlsConfigError::BadCertificateFilePath { source } => ServiceSettingsError::BadHttpTlsConfig {
+            id: id.to_owned(),
+            data: data.to_owned(),
+            source: TlsConfigError::BadCertificateFilePath {
+                source: source.to_owned(),
+            },
         },
-        TlsConfigError::BadKeyFilePath { source } => ServiceConfigError::BadHttpTlsConfig {
-            source: TlsConfigError::BadKeyFilePath { source: source.clone() },
+        TlsConfigError::BadKeyFilePath { source } => ServiceSettingsError::BadHttpTlsConfig {
+            id: id.to_owned(),
+            data: data.to_owned(),
+            source: TlsConfigError::BadCertificateFilePath {
+                source: source.to_owned(),
+            },
         },
     }
 }
 
-fn get_name(name: &String) -> Result<String, ServiceConfigError> {
+fn get_name(name: &String) -> Result<String, ServiceSettingsError> {
     if !name.is_empty() {
         Ok(name.clone())
     } else {
-        Err(ServiceConfigError::UnnamedServer)
+        Err(ServiceSettingsError::UnnamedService)
     }
 }
 
-fn get_socket(bind_addr: &String) -> Result<SocketAddr, ServiceConfigError> {
+fn get_socket(bind_addr: &String) -> Result<SocketAddr, ServiceSettingsError> {
     if !bind_addr.is_empty() {
         match bind_addr.parse::<SocketAddr>() {
             Ok(socket) => Ok(socket),
-            Err(source) => Err(ServiceConfigError::BindingAddressBadSyntax {
+            Err(source) => Err(ServiceSettingsError::BindingAddressBadSyntax {
                 input: bind_addr.to_string(),
                 source,
             }),
         }
     } else {
-        Err(ServiceConfigError::BindingAddressIsEmpty)
+        Err(ServiceSettingsError::BindingAddressIsEmpty)
     }
 }
 

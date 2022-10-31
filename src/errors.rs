@@ -1,6 +1,8 @@
 use thiserror::Error;
 use warp::reject::Reject;
 
+use crate::settings::{CommonSettings, DatabaseSettings, GlobalSettings, ServiceSetting, TrackerSettings};
+
 #[derive(Error, Debug)]
 pub enum ServerError {
     #[error("internal server error")]
@@ -37,36 +39,95 @@ pub enum ServerError {
     InvalidConnectionCookie,
 
     #[error("bad server configuration")]
-    ConfigurationError { message: String, source: ServiceConfigError },
+    ServiceSettingsError { message: String, source: ServiceSettingsError },
 }
 
 impl Reject for ServerError {}
 
 #[derive(Error, Debug)]
 pub enum SettingsError {
-    #[error("Non-Optional Field is missing! \"{message}\"")]
-    MissingFieldError { message: String },
+    #[error("Bad Namespace: \".namespace\" {message}")]
+    NamespaceError { message: String },
 
-    #[error("Non-Optional Field: is empty! \"{message}\"")]
-    EmptyFieldError { message: String },
+    // Todo: Expand this for Semantic Versioning 2.0.0
+    #[error("Bad Version: \".namespace\" {message}")]
+    VersionError { message: String },
+
+    #[error("Tracker Settings Error: \"settings.{message}")]
+    TrackerSettingsError { message: String, source: TrackerSettingsError },
+
+    #[error("Global Settings Error: \"settings.global.{message}")]
+    GlobalSettingsError { message: String, source: GlobalSettingsError },
+
+    #[error("Common Settings Error: \"settings.common.{message}")]
+    CommonSettingsError { message: String, source: CommonSettingsError },
+
+    #[error("Database Settings Error: \"settings.database.{message}")]
+    DatabaseSettingsError { message: String, source: DatabaseSettingsError },
+
+    #[error("Service Settings Error: \"settings.service.{id}.{message}")]
+    ServiceSettingsError {
+        id: String,
+        message: String,
+        source: ServiceSettingsError,
+    },
 }
 
 #[derive(Error, Debug, Clone)]
-pub enum ServiceConfigError {
-    #[error("This Server is Unamed!")]
-    UnnamedServer,
+pub enum TrackerSettingsError {
+    #[error("\"{field}\": Required Field is missing (null)!")]
+    MissingRequiredField { field: String, data: TrackerSettings },
+}
 
-    #[error("Binding Address is Empty!")]
-    BindingAddressIsEmpty,
+#[derive(Error, Debug, Clone)]
+pub enum GlobalSettingsError {
+    #[error("\"{field}\": Required Field is missing (null)!")]
+    MissingRequiredField { field: String, data: GlobalSettings },
+}
+
+#[derive(Error, Debug, Clone)]
+pub enum CommonSettingsError {
+    #[error("\"{field}\": Required Field is missing (null)!")]
+    MissingRequiredField { field: String, data: CommonSettings },
+
+    #[error("\"{field}\": Required Field is empty (0 or \"\")!")]
+    EmptyRequiredField { field: String, data: CommonSettings },
+}
+
+#[derive(Error, Debug, Clone)]
+pub enum DatabaseSettingsError {
+    #[error("\"{field}\": Required Field is missing (null)!")]
+    MissingRequiredField { field: String, data: DatabaseSettings },
+
+    #[error("\"{field}\": Required Field is empty (0 or \"\")!")]
+    EmptyRequiredField { field: String, data: DatabaseSettings },
+}
+
+#[derive(Error, Debug, Clone)]
+pub enum ServiceSettingsError {
+    #[error("{field}\": Required Field is missing (null)!")]
+    MissingRequiredField { field: String, data: ServiceSetting },
+
+    #[error("{field}\": Required Field is empty (0 or \"\")!")]
+    EmptyRequiredField { field: String, data: ServiceSetting },
+
+    #[error("Service {id} is without Display Name!")]
+    UnnamedService { id: String, data: ServiceSetting },
 
     #[error("Binding Address: \"{input}\" has Bad Syntax: {source}")]
     BindingAddressBadSyntax {
+        id: String,
         input: String,
         source: std::net::AddrParseError,
+        data: ServiceSetting,
     },
 
     #[error("Bad TLS Configuration: {source}")]
-    BadHttpTlsConfig { source: TlsConfigError },
+    BadHttpTlsConfig {
+        id: String,
+        source: TlsConfigError,
+        data: ServiceSetting,
+    },
 }
 
 #[derive(Error, Debug, Clone)]

@@ -10,7 +10,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::config_const::{CONFIG_DEFAULT, CONFIG_FOLDER, CONFIG_LOCAL, CONFIG_OLD_LOCAL, CONFIG_OVERRIDE};
 use crate::databases::database::DatabaseDrivers;
-use crate::errors::SettingsError;
+use crate::errors::{
+    CommonSettingsError, DatabaseSettingsError, GlobalSettingsError, ServiceSettingsError, SettingsError, TrackerSettingsError,
+};
 use crate::mode::TrackerMode;
 
 #[macro_export]
@@ -28,13 +30,14 @@ macro_rules! old_to_new {
 }
 
 #[macro_export]
-macro_rules! check_not_none {
-    ( $( $message:expr, $base:expr; $($value: ident),+ )? ) => {
+macro_rules! check_field_is_not_none {
+    ( $(  $ctx:expr => $error:ident; $($value:ident),+, )? ) => {
         {
             $( $(
-                if $base.$value.is_none() {
-                    return Err(SettingsError::MissingFieldError {
-                        message: format!("{}{}", $message, stringify!($value)),
+                if $ctx.$value.is_none() {
+                    return Err($error::MissingRequiredField {
+                        field: format!("{}", stringify!($value)),
+                        data: $ctx.to_owned(),
                     })
                 };
             )+
@@ -44,15 +47,25 @@ macro_rules! check_not_none {
 }
 
 #[macro_export]
-macro_rules! check_not_empty {
-    ( $($message:expr, $base:expr; $($value: ident: $value_type: ty),+ )? ) => {
+macro_rules! check_field_is_not_empty {
+    ( $( $ctx:expr => $error:ident;$($value:ident : $value_type:ty),+, )? ) => {
         {
             $( $(
-                if $base.$value.unwrap_or_default() == <$value_type>::default() {
-                    return Err(SettingsError::EmptyFieldError {
-                        message: format!("{}", $message, stringify!($value)),
-                    })
-                };
+                match $ctx.$value {
+                    Some(value) => {
+                        if value == <$value_type>::default(){
+                        return Err($error::EmptyRequiredField {
+                            field: format!("{}", stringify!($value)),
+                            data: $ctx.to_owned()});
+                        }
+                    },
+                    None => {
+                        return Err($error::MissingRequiredField {
+                            field: format!("{}", stringify!($value)),
+                            data: $ctx.to_owned(),
+                        });
+                    },
+                }
             )+
             )?
         }
@@ -126,6 +139,27 @@ pub struct Settings {
     pub tracker: TrackerSettings,
 }
 
+impl Settings {
+    pub fn check(&self) -> Result<(), SettingsError> {
+        if self.namespace != SETTINGS_NAMESPACE.to_string() {
+            return Err(SettingsError::NamespaceError {
+                message: format!("Actual: \"{}\", Expected: \"{}\"", self.namespace, SETTINGS_NAMESPACE),
+            });
+        }
+
+        // Todo: Make this Check use Semantic Versioning 2.0.0
+        if self.version != SETTINGS_VERSION.to_string() {
+            return Err(SettingsError::VersionError {
+                message: format!("Actual: \"{}\", Expected: \"{}\"", self.namespace, SETTINGS_NAMESPACE),
+            });
+        }
+
+        if match Err(source) = self.tracker.check()
+
+        Ok(())
+    }
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -154,15 +188,24 @@ pub struct TrackerSettings {
     pub service: Option<BTreeMap<String, ServiceSetting>>,
 }
 
+impl TrackerSettings {
+    fn check(&self) -> Result<(), TrackerSettingsError> {
+        check_field_is_not_none!(self => TrackerSettingsError;
+            global, common, database, service,
+        );
+        Ok(())
+    }
+}
+
 #[derive(Debug)]
 pub struct TrackerSettingsBuilder {
-    settings: TrackerSettings,
+    tracker_settings: TrackerSettings,
 }
 
 impl From<&TrackerSettings> for TrackerSettingsBuilder {
-    fn from(settings: &TrackerSettings) -> Self {
+    fn from(tracker_settings: &TrackerSettings) -> Self {
         Self {
-            settings: settings.clone(),
+            tracker_settings: tracker_settings.clone(),
         }
     }
 }
@@ -171,17 +214,18 @@ impl TryInto<TrackerSettings> for TrackerSettingsBuilder {
     type Error = SettingsError;
 
     fn try_into(self) -> Result<TrackerSettings, Self::Error> {
-        check_not_none!("settings.{}",self.settings;
-        global,
-        common,
-        database
-        );
+        if let Err(source) = self.tracker_settings.check() {
+            return Err(SettingsError::TrackerSettingsError {
+                message: "".to_string(),
+                source,
+            });
+        }
 
         let settings = TrackerSettings {
-            global: Some(GlobalSettingsBuilder::from(&self.settings.global.unwrap()).try_into()?),
-            common: Some(CommonSettingsBuilder::from(&self.settings.common.unwrap()).try_into()?),
-            database: Some(DatabaseSettingsBuilder::from(&self.settings.database.unwrap()).try_into()?),
-            service: match self.settings.service {
+            global: Some(GlobalSettingsBuilder::from(&self.tracker_settings.global.unwrap()).try_into()?),
+            common: Some(CommonSettingsBuilder::from(&self.tracker_settings.common.unwrap()).try_into()?),
+            database: Some(DatabaseSettingsBuilder::from(&self.tracker_settings.database.unwrap()).try_into()?),
+            service: match self.tracker_settings.service {
                 Some(services) => Some(ServicesBuilder::from(&services).try_into()?),
                 None => None,
             },
@@ -194,13 +238,13 @@ impl TryInto<TrackerSettings> for TrackerSettingsBuilder {
 impl TrackerSettingsBuilder {
     pub fn empty() -> TrackerSettingsBuilder {
         Self {
-            settings: TrackerSettings::default(),
+            tracker_settings: TrackerSettings::default(),
         }
     }
 
     pub fn default() -> TrackerSettingsBuilder {
         Self {
-            settings: TrackerSettings {
+            tracker_settings: TrackerSettings {
                 global: Some(GlobalSettingsBuilder::default().global_settings),
                 common: Some(CommonSettingsBuilder::default().common_settings),
                 database: Some(DatabaseSettingsBuilder::default().database_settings),
@@ -211,46 +255,46 @@ impl TrackerSettingsBuilder {
 
     pub fn import_old(&mut self, old_settings: &old_settings::Settings) {
         // Global
-        let mut builder = match self.settings.global.as_ref() {
+        let mut builder = match self.tracker_settings.global.as_ref() {
             Some(settings) => GlobalSettingsBuilder::from(settings),
             None => GlobalSettingsBuilder::empty(),
         };
         builder.import_old(old_settings);
 
-        self.settings.global = Some(builder.global_settings);
+        self.tracker_settings.global = Some(builder.global_settings);
 
         // Common
-        let mut builder = match self.settings.common.as_ref() {
+        let mut builder = match self.tracker_settings.common.as_ref() {
             Some(settings) => CommonSettingsBuilder::from(settings),
             None => CommonSettingsBuilder::empty(),
         };
         builder.import_old(old_settings);
 
-        self.settings.common = Some(builder.common_settings);
+        self.tracker_settings.common = Some(builder.common_settings);
 
         // Database
         if old_settings.db_driver.is_some() | old_settings.db_path.is_some() {
-            if self.settings.database.is_none() {
-                self.settings.database = Some(DatabaseSettingsBuilder::empty().database_settings);
+            if self.tracker_settings.database.is_none() {
+                self.tracker_settings.database = Some(DatabaseSettingsBuilder::empty().database_settings);
             }
 
             if let Some(val) = old_settings.db_driver.as_ref() {
-                self.settings.database.as_mut().unwrap().driver = Some(*val)
+                self.tracker_settings.database.as_mut().unwrap().driver = Some(*val)
             }
 
             if let Some(val) = old_settings.db_path.as_ref() {
-                self.settings.database.as_mut().unwrap().path = Some(val.clone())
+                self.tracker_settings.database.as_mut().unwrap().path = Some(val.clone())
             }
         }
 
         // Services
-        let mut builder = match self.settings.service.as_ref() {
+        let mut builder = match self.tracker_settings.service.as_ref() {
             Some(settings) => ServicesBuilder::from(settings),
             None => ServicesBuilder::empty(),
         };
         builder.import_old(old_settings);
 
-        self.settings.service = Some(builder.services);
+        self.tracker_settings.service = Some(builder.services);
     }
 }
 
@@ -259,6 +303,16 @@ pub struct GlobalSettings {
     pub log_filter_level: Option<LogFilterLevel>,
     pub external_ip: Option<String>,
     pub is_on_reverse_proxy: Option<bool>,
+}
+
+impl GlobalSettings {
+    fn check(&self) -> Result<(), GlobalSettingsError> {
+        check_field_is_not_none!(self => GlobalSettingsError;
+            log_filter_level, is_on_reverse_proxy,
+        );
+
+        Ok(())
+    }
 }
 
 #[derive(Debug)]
@@ -278,12 +332,13 @@ impl TryInto<GlobalSettings> for GlobalSettingsBuilder {
     type Error = SettingsError;
 
     fn try_into(self) -> Result<GlobalSettings, Self::Error> {
-        check_not_none!("settings.global.{}",self.global_settings;
-        log_filter_level,
-        is_on_reverse_proxy
-        );
-
-        Ok(self.global_settings)
+        match self.global_settings.check() {
+            Ok(_) => Ok(self.global_settings),
+            Err(source) => Err(SettingsError::GlobalSettingsError {
+                message: "".to_string(),
+                source,
+            }),
+        }
     }
 }
 
@@ -339,6 +394,26 @@ pub struct CommonSettings {
     pub enable_peerless_torrent_pruning: Option<bool>,
 }
 
+impl CommonSettings {
+    fn check(&self) -> Result<(), CommonSettingsError> {
+        check_field_is_not_none!(self => CommonSettingsError;
+            tracker_mode,
+            enable_tracker_usage_statistics,
+            enable_persistent_statistics,
+            enable_peerless_torrent_pruning,
+        );
+
+        check_field_is_not_empty!(self => CommonSettingsError;
+            announce_interval_seconds: u32,
+            announce_interval_seconds_minimum: u32,
+            peer_timeout_seconds_maximum: u32,
+            cleanup_inactive_peers_interval_seconds: u64,
+        );
+
+        Ok(())
+    }
+}
+
 #[derive(Debug)]
 pub struct CommonSettingsBuilder {
     pub common_settings: CommonSettings,
@@ -356,25 +431,13 @@ impl TryInto<CommonSettings> for CommonSettingsBuilder {
     type Error = SettingsError;
 
     fn try_into(self) -> Result<CommonSettings, Self::Error> {
-        check_not_none!("settings.common.{}",self.common_settings;
-            tracker_mode,
-            announce_interval_seconds,
-            announce_interval_seconds_minimum,
-            peer_timeout_seconds_maximum,
-            enable_tracker_usage_statistics,
-            enable_persistent_statistics,
-            cleanup_inactive_peers_interval_seconds,
-            enable_peerless_torrent_pruning
-        );
-
-        check_not_empty!("settings.common.{}",self.common_settings;
-            announce_interval_seconds: u32,
-            announce_interval_seconds_minimum: u32,
-            peer_timeout_seconds_maximum: u32,
-            cleanup_inactive_peers_interval_seconds: u64
-        );
-
-        Ok(self.common_settings)
+        match self.common_settings.check() {
+            Ok(_) => Ok(self.common_settings),
+            Err(source) => Err(SettingsError::CommonSettingsError {
+                message: source.to_string(),
+                source,
+            }),
+        }
     }
 }
 
@@ -419,6 +482,18 @@ pub struct DatabaseSettings {
     pub path: Option<String>,
 }
 
+impl DatabaseSettings {
+    fn check(&self) -> Result<(), DatabaseSettingsError> {
+        check_field_is_not_none!(self => DatabaseSettingsError;
+            driver,);
+
+        check_field_is_not_empty!(self => DatabaseSettingsError;
+            path: String,);
+
+        Ok(())
+    }
+}
+
 #[derive(Debug)]
 pub struct DatabaseSettingsBuilder {
     pub database_settings: DatabaseSettings,
@@ -436,20 +511,13 @@ impl TryInto<DatabaseSettings> for DatabaseSettingsBuilder {
     type Error = SettingsError;
 
     fn try_into(self) -> Result<DatabaseSettings, Self::Error> {
-        check_not_none!("settings.database.{}",self.database_settings;
-        driver,
-        path
-        );
-
-        let path = self.database_settings.path.clone();
-
-        if path.unwrap_or_default() == <String>::default() {
-            return Err(SettingsError::EmptyFieldError {
-                message: format!("settings.database.{}", "path"),
-            });
-        };
-
-        Ok(self.database_settings)
+        match self.database_settings.check() {
+            Ok(_) => Ok(self.database_settings),
+            Err(source) => Err(SettingsError::DatabaseSettingsError {
+                message: source.to_string(),
+                source,
+            }),
+        }
     }
 }
 
@@ -481,6 +549,18 @@ pub struct ServiceSetting {
 
 pub type Services = BTreeMap<String, ServiceSetting>;
 
+impl ServiceSetting {
+    fn check(&self) -> Result<(), ServiceSettingsError> {
+        check_field_is_not_none!(self => ServiceSettingsError;
+        enabled,service,);
+
+        check_field_is_not_empty!(self => ServiceSettingsError;
+            display_name: String,socket: String,);
+
+        Ok(())
+    }
+}
+
 #[derive(Debug)]
 pub struct ServicesBuilder {
     pub services: Services,
@@ -490,9 +570,16 @@ impl TryInto<Services> for ServicesBuilder {
     type Error = SettingsError;
 
     fn try_into(self) -> Result<Services, Self::Error> {
-        for service in self.services {
-            check_not_none!(format_args!("settings.service.{}.", service.0),service.1; enabled, display_name, service, socket );
+        for service in &self.services {
+            if let Err(source) = service.1.check() {
+                return Err(SettingsError::ServiceSettingsError {
+                    id: service.0.into(),
+                    message: source.to_string(),
+                    source,
+                });
+            }
         }
+
         Ok(self.services)
     }
 }
@@ -834,7 +921,7 @@ mod tests {
     #[test]
     fn write_test_configuration() {
         let local_source = Path::new(CONFIG_FOLDER).join(CONFIG_DEFAULT);
-        let json_string = serde_json::to_string_pretty(&TrackerSettingsBuilder::default().settings).unwrap();
+        let json_string = serde_json::to_string_pretty(&TrackerSettingsBuilder::default().tracker_settings).unwrap();
 
         fs::write(local_source.with_extension("new.json"), json_string).unwrap()
     }
@@ -849,7 +936,7 @@ mod tests {
     #[test]
     fn default_config_should_roundtrip() {
         let term_dir = env::temp_dir();
-        let default_settings = &TrackerSettingsBuilder::default().settings;
+        let default_settings = &TrackerSettingsBuilder::default().tracker_settings;
         let settings_json = serde_json::to_string_pretty(default_settings).unwrap();
 
         let mut hasher = DefaultHasher::new();
@@ -877,7 +964,7 @@ mod tests {
         new_settings_builder.import_old(&old_settings);
 
         let local_source = Path::new(CONFIG_FOLDER).join(CONFIG_LOCAL);
-        let json_string = serde_json::to_string_pretty(&new_settings_builder.settings).unwrap();
+        let json_string = serde_json::to_string_pretty(&new_settings_builder.tracker_settings).unwrap();
 
         fs::write(local_source.with_extension("new.json"), json_string).unwrap()
     }
@@ -891,7 +978,7 @@ mod tests {
         new_settings_builder.import_old(&old_settings);
 
         let local_source = Path::new(CONFIG_FOLDER).join(CONFIG_LOCAL);
-        let json_string = serde_json::to_string_pretty(&new_settings_builder.settings).unwrap();
+        let json_string = serde_json::to_string_pretty(&new_settings_builder.tracker_settings).unwrap();
 
         fs::write(local_source.with_extension("default.json"), json_string).unwrap()
     }
