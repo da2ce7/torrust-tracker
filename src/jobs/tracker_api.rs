@@ -6,6 +6,7 @@ use tokio::task::JoinHandle;
 use crate::api::server;
 use crate::old_settings::Settings;
 use crate::tracker::tracker::TorrentTracker;
+use crate::ApiServiceSettings;
 
 pub fn start_job(settings: &ApiServiceSettings, tracker: Arc<TorrentTracker>) -> JoinHandle<()> {
     let bind_addr = settings

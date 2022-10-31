@@ -7,7 +7,7 @@ use tokio::task::JoinHandle;
 use crate::jobs::{http_tracker, torrent_cleanup, tracker_api, udp_tracker};
 use crate::settings::Services;
 use crate::tracker::tracker::TorrentTracker;
-use crate::{HttpServiceSettings, UdpServiceSettings};
+use crate::{ApiServiceSettings, HttpServiceSettings, TlsServiceSettings, UdpServiceSettings};
 
 pub async fn setup(services: &Services, tracker: Arc<TorrentTracker>) -> Vec<JoinHandle<()>> {
     let mut jobs: Vec<JoinHandle<()>> = Vec::new();

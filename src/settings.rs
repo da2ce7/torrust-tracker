@@ -507,7 +507,7 @@ pub struct ServiceSetting {
 pub type Services = BTreeMap<String, ServiceSetting>;
 
 impl ServiceSetting {
-    fn check(&self) -> Result<(), ServiceSettingsError> {
+    pub fn check(&self) -> Result<(), ServiceSettingsError> {
         check_field_is_not_none!(self => ServiceSettingsError;
         enabled, service,);
 
