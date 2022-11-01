@@ -17,7 +17,7 @@ pub struct HttpServiceSettings {
 impl TryFrom<(&String, &ServiceSetting)> for HttpServiceSettings {
     type Error = ServiceSettingsError;
 
-    fn try_from(value: (&String, &ServiceSetting)) -> Result<Self, Self::Error> {
+    fn try_from(_value: (&String, &ServiceSetting)) -> Result<Self, Self::Error> {
         todo!()
     }
 }
@@ -34,7 +34,7 @@ pub struct TlsServiceSettings {
 impl TryFrom<(&String, &ServiceSetting)> for TlsServiceSettings {
     type Error = ServiceSettingsError;
 
-    fn try_from(value: (&String, &ServiceSetting)) -> Result<Self, Self::Error> {
+    fn try_from(_value: (&String, &ServiceSetting)) -> Result<Self, Self::Error> {
         todo!()
     }
 }

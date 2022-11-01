@@ -6,7 +6,7 @@ extern crate rand;
 mod udp_tracker_server {
     use core::panic;
     use std::io::Cursor;
-    use std::net::Ipv4Addr;
+    use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
 
@@ -18,23 +18,37 @@ mod udp_tracker_server {
     use tokio::net::UdpSocket;
     use tokio::task::JoinHandle;
     use torrust_tracker::jobs::udp_tracker;
-    use torrust_tracker::settings::old_settings::Settings;
-    use torrust_tracker::tracker::statistics::StatsTracker;
+    use torrust_tracker::tracker::helpers::TrackerArgs;
     use torrust_tracker::tracker::tracker::TorrentTracker;
-    use torrust_tracker::udp::MAX_PACKET_SIZE;
+    use torrust_tracker::udp::{UdpServiceSettings, MAX_PACKET_SIZE};
     use torrust_tracker::{logging, static_time};
 
-    fn tracker_settings() -> Arc<Settings> {
-        let mut settings = &mut Settings::default().unwrap();
-        settings.log_level = Some("off".to_owned());
-        settings.udp_trackers.as_mut().unwrap()[0].bind_address = Some(format!("127.0.0.1:{}", ephemeral_random_port()));
-        Arc::new(settings.clone())
+    pub struct UdpTestSettings {
+        tracker: TrackerArgs,
+        service: UdpServiceSettings,
+    }
+
+    impl Default for UdpTestSettings {
+        fn default() -> Self {
+            Self {
+                tracker: TrackerArgs::no_logs(),
+                service: UdpServiceSettings {
+                    id: "test".to_string(),
+                    display_name: "UDP Test Service".to_string(),
+                    socket: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, ephemeral_random_port())),
+                },
+            }
+        }
+    }
+
+    fn tracker_settings() -> Arc<UdpTestSettings> {
+        Arc::new(UdpTestSettings::default())
     }
 
     pub struct UdpServer {
         pub started: AtomicBool,
         pub job: Option<JoinHandle<()>>,
-        pub bind_address: Option<String>,
+        pub socket: Option<SocketAddr>,
     }
 
     impl UdpServer {
@@ -42,20 +56,22 @@ mod udp_tracker_server {
             Self {
                 started: AtomicBool::new(false),
                 job: None,
-                bind_address: None,
+                socket: None,
             }
         }
 
-        pub async fn start(&mut self, settings: Arc<Settings>) {
+        pub async fn start(&mut self, settings: Arc<UdpTestSettings>) {
             if !self.started.load(Ordering::Relaxed) {
                 // Set the time of Torrust app starting
                 lazy_static::initialize(&static_time::TIME_AT_APP_START);
 
-                // Initialize stats tracker
-                let stats_tracker = StatsTracker::new_active_instance();
-
                 // Initialize Torrust tracker
-                let tracker = match TorrentTracker::new(settings.clone(), Box::new(stats_tracker)) {
+                let tracker = match TorrentTracker::new(
+                    &settings.tracker.global,
+                    &settings.tracker.common,
+                    (settings.tracker.stats_tracker)(),
+                    (settings.tracker.database)(),
+                ) {
                     Ok(tracker) => Arc::new(tracker),
                     Err(error) => {
                         panic!("{}", error)
@@ -63,21 +79,19 @@ mod udp_tracker_server {
                 };
 
                 // Initialize logging
-                logging::setup_logging(&settings);
-
-                let udp_tracker_settings = &settings.udp_trackers.as_ref().unwrap()[0];
+                logging::setup_logging(&settings.tracker.global);
 
                 // Start the UDP tracker job
-                self.job = Some(udp_tracker::start_job(&udp_tracker_settings, tracker.clone()));
+                self.job = Some(udp_tracker::start_job(&settings.service, tracker.clone()));
 
-                self.bind_address = Some(udp_tracker_settings.bind_address.clone().unwrap());
+                self.socket = Some(settings.service.socket);
 
                 self.started.store(true, Ordering::Relaxed);
             }
         }
     }
 
-    async fn new_running_udp_server(settings: Arc<Settings>) -> UdpServer {
+    async fn new_running_udp_server(settings: Arc<UdpTestSettings>) -> UdpServer {
         let mut udp_server = UdpServer::new();
         udp_server.start(settings).await;
         udp_server
@@ -95,8 +109,8 @@ mod udp_tracker_server {
             }
         }
 
-        async fn connect(&self, remote_address: &str) {
-            self.socket.connect(remote_address).await.unwrap()
+        async fn connect(&self, remote_socket: &SocketAddr) {
+            self.socket.connect(remote_socket).await.unwrap()
         }
 
         async fn send(&self, bytes: &[u8]) -> usize {
@@ -111,9 +125,9 @@ mod udp_tracker_server {
     }
 
     /// Creates a new UdpClient connected to a Udp server
-    async fn new_connected_udp_client(remote_address: &str) -> UdpClient {
+    async fn new_connected_udp_client(remote_socket: &SocketAddr) -> UdpClient {
         let client = UdpClient::bind(&source_address(ephemeral_random_port())).await;
-        client.connect(remote_address).await;
+        client.connect(remote_socket).await;
         client
     }
 
@@ -150,8 +164,8 @@ mod udp_tracker_server {
     }
 
     /// Creates a new UdpTrackerClient connected to a Udp Tracker server
-    async fn new_connected_udp_tracker_client(remote_address: &str) -> UdpTrackerClient {
-        let udp_client = new_connected_udp_client(remote_address).await;
+    async fn new_connected_udp_tracker_client(remote_socket: &SocketAddr) -> UdpTrackerClient {
+        let udp_client = new_connected_udp_client(remote_socket).await;
         UdpTrackerClient { udp_client }
     }
 
@@ -211,7 +225,7 @@ mod udp_tracker_server {
 
         let udp_server = new_running_udp_server(settings).await;
 
-        let client = new_connected_udp_client(&udp_server.bind_address.unwrap()).await;
+        let client = new_connected_udp_client(&udp_server.socket.unwrap()).await;
 
         client.send(&empty_udp_request()).await;
 
@@ -228,7 +242,7 @@ mod udp_tracker_server {
 
         let udp_server = new_running_udp_server(settings).await;
 
-        let client = new_connected_udp_tracker_client(&udp_server.bind_address.unwrap()).await;
+        let client = new_connected_udp_tracker_client(&udp_server.socket.unwrap()).await;
 
         let connect_request = ConnectRequest {
             transaction_id: TransactionId(123),
@@ -260,7 +274,7 @@ mod udp_tracker_server {
 
         let udp_server = new_running_udp_server(settings).await;
 
-        let client = new_connected_udp_tracker_client(&udp_server.bind_address.unwrap()).await;
+        let client = new_connected_udp_tracker_client(&udp_server.socket.unwrap()).await;
 
         let connection_id = send_connection_request(TransactionId(123), &client).await;
 
@@ -294,7 +308,7 @@ mod udp_tracker_server {
 
         let udp_server = new_running_udp_server(settings).await;
 
-        let client = new_connected_udp_tracker_client(&udp_server.bind_address.unwrap()).await;
+        let client = new_connected_udp_tracker_client(&udp_server.socket.unwrap()).await;
 
         let connection_id = send_connection_request(TransactionId(123), &client).await;
 

@@ -4,8 +4,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::databases::mysql::MysqlDatabase;
 use crate::databases::sqlite::SqliteDatabase;
+use crate::protocol::common::InfoHash;
+use crate::settings::DatabaseSettings;
 use crate::tracker::key::AuthKey;
-use crate::InfoHash;
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Copy, Clone, Hash)]
 pub enum DatabaseDrivers {
@@ -19,16 +20,11 @@ impl Default for DatabaseDrivers {
     }
 }
 
-pub fn connect_database(db_driver: &DatabaseDrivers, db_path: &str) -> Result<Box<dyn Database>, r2d2::Error> {
-    let database: Box<dyn Database> = match db_driver {
-        DatabaseDrivers::Sqlite3 => {
-            let db = SqliteDatabase::new(db_path)?;
-            Box::new(db)
-        }
-        DatabaseDrivers::MySQL => {
-            let db = MysqlDatabase::new(db_path)?;
-            Box::new(db)
-        }
+pub fn connect_database(database_settings: &DatabaseSettings) -> Result<Box<dyn Database>, r2d2::Error> {
+    let database: Box<dyn Database> = match database_settings.get_driver().unwrap() {
+        // todo: handel errors
+        DatabaseDrivers::Sqlite3 => Box::new(SqliteDatabase::new(&database_settings.try_into().unwrap())?),
+        DatabaseDrivers::MySQL => Box::new(MysqlDatabase::new(&database_settings.try_into().unwrap())?),
     };
 
     database.create_database_tables().expect("Could not create database tables.");

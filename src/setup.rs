@@ -4,10 +4,12 @@ use std::sync::Arc;
 use log::warn;
 use tokio::task::JoinHandle;
 
+use crate::api::server::ApiServiceSettings;
+use crate::http::{HttpServiceSettings, TlsServiceSettings};
 use crate::jobs::{http_tracker, torrent_cleanup, tracker_api, udp_tracker};
-use crate::settings::Services;
+use crate::settings::{ServiceProtocol, Services};
 use crate::tracker::tracker::TorrentTracker;
-use crate::{ApiServiceSettings, HttpServiceSettings, TlsServiceSettings, UdpServiceSettings};
+use crate::udp::UdpServiceSettings;
 
 pub async fn setup(services: &Services, tracker: Arc<TorrentTracker>) -> Vec<JoinHandle<()>> {
     let mut jobs: Vec<JoinHandle<()>> = Vec::new();
@@ -34,11 +36,8 @@ pub async fn setup(services: &Services, tracker: Arc<TorrentTracker>) -> Vec<Joi
         .into_iter()
         .filter(|service| service.1.enabled.filter(|t| t.to_owned()).is_some())
     {
-        // Re-Check Here
-        assert!(service.1.check().is_ok());
-
         match service.1.service.unwrap() {
-            UDP => {
+            ServiceProtocol::UDP => {
                 // Todo: Handel Error.
                 let service: UdpServiceSettings = service.try_into().unwrap();
 
@@ -47,7 +46,7 @@ pub async fn setup(services: &Services, tracker: Arc<TorrentTracker>) -> Vec<Joi
 
                 udp_services.insert(service);
             }
-            HTTP => {
+            ServiceProtocol::HTTP => {
                 // Todo: Handel Error.
                 let service: HttpServiceSettings = service.try_into().unwrap();
 
@@ -56,7 +55,7 @@ pub async fn setup(services: &Services, tracker: Arc<TorrentTracker>) -> Vec<Joi
 
                 http_services.insert(service);
             }
-            TLS => {
+            ServiceProtocol::TLS => {
                 // Todo: Handel Error.
                 let service: TlsServiceSettings = service.try_into().unwrap();
 
@@ -65,7 +64,7 @@ pub async fn setup(services: &Services, tracker: Arc<TorrentTracker>) -> Vec<Joi
 
                 tls_services.insert(service);
             }
-            API => {
+            ServiceProtocol::API => {
                 // Todo: Handel Error.
                 let service: ApiServiceSettings = service.try_into().unwrap();
 
@@ -106,8 +105,10 @@ pub async fn setup(services: &Services, tracker: Arc<TorrentTracker>) -> Vec<Joi
     }
 
     // Remove torrents without peers, every interval
-    if tracker.torrent_cleanup_interval > 0 {
-        jobs.push(torrent_cleanup::start_job(&tracker.torrent_cleanup_interval, tracker.clone()));
+    if let Some(interval) = tracker.common.cleanup_inactive_peers_interval_seconds {
+        if interval > 0 {
+            jobs.push(torrent_cleanup::start_job(interval, tracker.clone()));
+        }
     }
 
     jobs

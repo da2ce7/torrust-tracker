@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::net::IpAddr;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use log::debug;
@@ -12,12 +11,12 @@ use crate::errors::ServerError;
 use crate::http::{
     AnnounceRequest, AnnounceResponse, ErrorResponse, Peer, ScrapeRequest, ScrapeResponse, ScrapeResponseEntry, WebResult,
 };
-use crate::peer::TorrentPeer;
+use crate::protocol::common::InfoHash;
 use crate::tracker::key::AuthKey;
+use crate::tracker::peer::TorrentPeer;
 use crate::tracker::statistics::TrackerStatisticsEvent;
 use crate::tracker::torrent::{TorrentError, TorrentStats};
 use crate::tracker::tracker::TorrentTracker;
-use crate::InfoHash;
 
 /// Authenticate InfoHash using optional AuthKey
 pub async fn authenticate(
@@ -54,22 +53,13 @@ pub async fn handle_announce(
 
     debug!("{:?}", announce_request);
 
-    let peer = TorrentPeer::from_http_announce_request(
-        &announce_request,
-        announce_request.peer_addr,
-        match &tracker.settings.external_ip {
-            Some(ip) => IpAddr::from_str(&ip).map_or(None, |ip| Some(ip)),
-            None => None,
-        },
-    );
+    let peer = TorrentPeer::from_http_announce_request(&announce_request, announce_request.peer_addr, tracker.external_ip);
     let torrent_stats = tracker
         .update_torrent_with_peer_and_get_stats(&announce_request.info_hash, &peer)
         .await;
 
     // get all torrent peers excluding the peer_addr
     let peers = tracker.get_torrent_peers(&announce_request.info_hash, &peer.peer_addr).await;
-
-    let announce_interval = tracker.settings.announce_interval;
 
     // send stats event
     match announce_request.peer_addr {
@@ -85,8 +75,8 @@ pub async fn handle_announce(
         &announce_request,
         torrent_stats,
         peers,
-        announce_interval.unwrap(),
-        tracker.settings.min_announce_interval.unwrap(),
+        tracker.common.announce_interval_seconds.unwrap(),
+        tracker.common.announce_interval_seconds_minimum.unwrap(),
     )
 }
 

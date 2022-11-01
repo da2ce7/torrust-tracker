@@ -1,3 +1,5 @@
+use std::net::AddrParseError;
+
 use thiserror::Error;
 use warp::reject::Reject;
 
@@ -99,7 +101,7 @@ pub enum TrackerSettingsError {
 impl TrackerSettingsError {
     pub fn get_field(&self) -> String {
         match self {
-            Self::MissingRequiredField { field, data } => field,
+            Self::MissingRequiredField { field, data: _ } => field,
         }
         .to_owned()
     }
@@ -109,12 +111,26 @@ impl TrackerSettingsError {
 pub enum GlobalSettingsError {
     #[error("Required Field is missing (null)!")]
     MissingRequiredField { field: String, data: GlobalSettings },
+
+    #[error("Bad Socket String: \"{input}\".")]
+    ExternalIpBadSyntax {
+        field: String,
+        input: String,
+        source: AddrParseError,
+        data: GlobalSettings,
+    },
 }
 
 impl GlobalSettingsError {
     pub fn get_field(&self) -> String {
         match self {
-            Self::MissingRequiredField { field, data } => field,
+            Self::MissingRequiredField { field, data: _ } => field,
+            Self::ExternalIpBadSyntax {
+                field,
+                input: _,
+                source: _,
+                data: _,
+            } => field,
         }
         .to_owned()
     }
@@ -132,8 +148,8 @@ pub enum CommonSettingsError {
 impl CommonSettingsError {
     pub fn get_field(&self) -> String {
         match self {
-            Self::MissingRequiredField { field, data } => field,
-            Self::EmptyRequiredField { field, data } => field,
+            Self::MissingRequiredField { field, data: _ } => field,
+            Self::EmptyRequiredField { field, data: _ } => field,
         }
         .to_owned()
     }
@@ -151,8 +167,8 @@ pub enum DatabaseSettingsError {
 impl DatabaseSettingsError {
     pub fn get_field(&self) -> String {
         match self {
-            Self::MissingRequiredField { field, data } => field,
-            Self::EmptyRequiredField { field, data } => field,
+            Self::MissingRequiredField { field, data: _ } => field,
+            Self::EmptyRequiredField { field, data: _ } => field,
         }
         .to_owned()
     }
@@ -172,10 +188,18 @@ pub enum ServiceSettingsError {
     #[error("TLS Services Requires TLS Settings!")]
     TlsRequiresTlsConfig { field: String, data: ServiceSetting },
 
-    #[error("Bad TLS Configuration: {source}")]
+    #[error("Bad TLS Configuration: {source}.")]
     TlsSettingsError {
         field: String,
         source: TlsSettingsError,
+        data: ServiceSetting,
+    },
+
+    #[error("Bad Socket String: \"{input}\".")]
+    BindingAddressBadSyntax {
+        field: String,
+        input: String,
+        source: AddrParseError,
         data: ServiceSetting,
     },
 }
@@ -183,11 +207,21 @@ pub enum ServiceSettingsError {
 impl ServiceSettingsError {
     pub fn get_field(&self) -> String {
         match self {
-            Self::MissingRequiredField { field, data } => field,
-            Self::EmptyRequiredField { field, data } => field,
-            Self::ApiRequiresAccessToken { field, data } => field,
-            Self::TlsRequiresTlsConfig { field, data } => field,
-            Self::TlsSettingsError { field, source, data } => field,
+            Self::MissingRequiredField { field, data: _ } => field,
+            Self::EmptyRequiredField { field, data: _ } => field,
+            Self::ApiRequiresAccessToken { field, data: _ } => field,
+            Self::TlsRequiresTlsConfig { field, data: _ } => field,
+            Self::TlsSettingsError {
+                field,
+                source: _,
+                data: _,
+            } => field,
+            Self::BindingAddressBadSyntax {
+                field,
+                input: _,
+                source: _,
+                data: _,
+            } => field,
         }
         .to_owned()
     }
@@ -211,10 +245,10 @@ pub enum TlsSettingsError {
 impl TlsSettingsError {
     pub fn get_field(&self) -> String {
         match self {
-            Self::MissingRequiredField { field, data } => field,
-            Self::EmptyRequiredField { field, data } => field,
-            Self::BadCertificateFilePath { field, source } => field,
-            Self::BadKeyFilePath { field, source } => field,
+            Self::MissingRequiredField { field, data: _ } => field,
+            Self::EmptyRequiredField { field, data: _ } => field,
+            Self::BadCertificateFilePath { field, source: _ } => field,
+            Self::BadKeyFilePath { field, source: _ } => field,
         }
         .to_owned()
     }
@@ -222,15 +256,34 @@ impl TlsSettingsError {
 
 #[derive(Error, Debug, Clone)]
 pub enum FilePathError {
-    #[error("File Path Supplied is Empty!")]
-    FilePathIsEmpty,
-
     #[error("File Path failed to Canonicalize: {input}, {message}")]
     FilePathIsUnresolvable { input: String, message: String },
 
-    #[error("File Path destination dose not exist: {input}")]
-    FilePathDoseNotExist { input: String },
-
     #[error("File Path destination is not a file: {input}")]
     FilePathIsNotAFile { input: String },
+}
+
+pub mod helpers {
+    use std::path::{Path, PathBuf};
+
+    use crate::errors::FilePathError;
+
+    pub fn get_existing_file_path(file_path: &String) -> Result<PathBuf, FilePathError> {
+        match Path::new(file_path).canonicalize() {
+            Ok(path) => {
+                if path.is_file() {
+                    Ok(path)
+                } else {
+                    Err(FilePathError::FilePathIsNotAFile {
+                        input: path.display().to_string(),
+                    })
+                }
+            }
+
+            Err(error) => Err(FilePathError::FilePathIsUnresolvable {
+                input: file_path.clone(),
+                message: error.to_string(),
+            }),
+        }
+    }
 }

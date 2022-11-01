@@ -7,8 +7,10 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use warp::{filters, reply, serve, Filter};
 
-use crate::peer::TorrentPeer;
+use crate::errors::ServiceSettingsError;
 use crate::protocol::common::*;
+use crate::settings::ServiceSetting;
+use crate::tracker::peer::TorrentPeer;
 use crate::tracker::tracker::TorrentTracker;
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -22,7 +24,7 @@ pub struct ApiServiceSettings {
 impl TryFrom<(&String, &ServiceSetting)> for ApiServiceSettings {
     type Error = ServiceSettingsError;
 
-    fn try_from(value: (&String, &ServiceSetting)) -> Result<Self, Self::Error> {
+    fn try_from(_value: (&String, &ServiceSetting)) -> Result<Self, Self::Error> {
         todo!()
     }
 }
@@ -103,7 +105,7 @@ fn authenticate(tokens: BTreeMap<String, String>) -> impl Filter<Extract = (), E
         .untuple_one()
 }
 
-pub fn start(socket_addr: SocketAddr, tracker: Arc<TorrentTracker>) -> impl warp::Future<Output = ()> {
+pub fn start(settings: &ApiServiceSettings, tracker: Arc<TorrentTracker>) -> impl warp::Future<Output = ()> {
     // GET /api/torrents?offset=:u32&limit=:u32
     // View torrent list
     let api_torrents = tracker.clone();
@@ -365,19 +367,9 @@ pub fn start(socket_addr: SocketAddr, tracker: Arc<TorrentTracker>) -> impl warp
             .or(reload_keys),
     );
 
-    let server = api_routes.and(authenticate(
-        tracker
-            .settings
-            .http_api
-            .as_ref()
-            .unwrap()
-            .access_tokens
-            .as_ref()
-            .unwrap()
-            .clone(),
-    ));
+    let server = api_routes.and(authenticate(settings.access_tokens.to_owned()));
 
-    let (_addr, api_server) = serve(server).bind_with_graceful_shutdown(socket_addr, async move {
+    let (_addr, api_server) = serve(server).bind_with_graceful_shutdown(settings.socket, async move {
         tokio::signal::ctrl_c().await.expect("Failed to listen to shutdown signal.");
     });
 

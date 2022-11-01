@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::str::FromStr;
 
 use async_trait::async_trait;
@@ -7,17 +8,32 @@ use r2d2_sqlite::SqliteConnectionManager;
 
 use crate::databases::database;
 use crate::databases::database::{Database, Error};
+use crate::errors::DatabaseSettingsError;
 use crate::protocol::clock::DurationSinceUnixEpoch;
+use crate::protocol::common::InfoHash;
+use crate::settings::DatabaseSettings;
 use crate::tracker::key::AuthKey;
-use crate::InfoHash;
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct Sqlite3DatabaseSettings {
+    pub database_file_path: PathBuf,
+}
+
+impl TryFrom<&DatabaseSettings> for Sqlite3DatabaseSettings {
+    type Error = DatabaseSettingsError;
+
+    fn try_from(_value: &DatabaseSettings) -> Result<Self, Self::Error> {
+        todo!()
+    }
+}
 
 pub struct SqliteDatabase {
     pool: Pool<SqliteConnectionManager>,
 }
 
 impl SqliteDatabase {
-    pub fn new(db_path: &str) -> Result<SqliteDatabase, r2d2::Error> {
-        let cm = SqliteConnectionManager::file(db_path);
+    pub fn new(settings: &Sqlite3DatabaseSettings) -> Result<SqliteDatabase, r2d2::Error> {
+        let cm = SqliteConnectionManager::file(settings.database_file_path.as_path());
         let pool = Pool::new(cm).expect("Failed to create r2d2 SQLite connection pool.");
         Ok(SqliteDatabase { pool })
     }

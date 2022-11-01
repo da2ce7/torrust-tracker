@@ -3,21 +3,20 @@ use std::sync::Arc;
 use log::{error, info, warn};
 use tokio::task::JoinHandle;
 
-use crate::settings::old_settings::UdpTrackerConfig;
 use crate::tracker::tracker::TorrentTracker;
-use crate::{UdpServer, UdpServiceSettings};
+use crate::udp::{UdpServer, UdpServiceSettings};
 
 pub fn start_job(settings: &UdpServiceSettings, tracker: Arc<TorrentTracker>) -> JoinHandle<()> {
-    let bind_addr = settings.bind_address.clone();
+    let settings = settings.to_owned();
 
     tokio::spawn(async move {
-        match UdpServer::new(tracker, &bind_addr.as_ref().unwrap()).await {
+        match UdpServer::new(tracker, &settings.socket).await {
             Ok(udp_server) => {
-                info!("Starting UDP server on: {}", bind_addr.as_ref().clone().unwrap());
+                info!("Starting UDP server on: {}", settings.socket);
                 udp_server.start().await;
             }
             Err(e) => {
-                warn!("Could not start UDP tracker on: {}", bind_addr.as_ref().unwrap());
+                warn!("Could not start UDP tracker on: {}", settings.socket);
                 error!("{}", e);
             }
         }

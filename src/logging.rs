@@ -1,14 +1,13 @@
-use std::str::FromStr;
 use std::sync::Once;
 
 use log::{info, LevelFilter};
 
-use crate::old_settings::Settings;
+use crate::settings::GlobalSettings;
 
 static INIT: Once = Once::new();
 
-pub fn setup_logging(settings: &Settings) {
-    let level = settings_level_or_default(&settings.log_level);
+pub fn setup_logging(settings: &GlobalSettings) {
+    let level = settings.get_log_filter_level();
 
     if level == log::LevelFilter::Off {
         return;
@@ -17,13 +16,6 @@ pub fn setup_logging(settings: &Settings) {
     INIT.call_once(|| {
         stdout_settings(level);
     });
-}
-
-fn settings_level_or_default(log_level: &Option<String>) -> LevelFilter {
-    match log_level {
-        None => log::LevelFilter::Info,
-        Some(level) => LevelFilter::from_str(level).unwrap(),
-    }
 }
 
 fn stdout_settings(level: LevelFilter) {

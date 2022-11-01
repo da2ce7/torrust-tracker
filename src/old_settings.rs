@@ -9,7 +9,7 @@ use serde_with::serde_as;
 
 use crate::config_const::{CONFIG_DEFAULT, CONFIG_FOLDER, CONFIG_LOCAL, CONFIG_OLD_LOCAL, CONFIG_OVERRIDE};
 use crate::databases::database::DatabaseDrivers;
-use crate::mode::TrackerMode;
+use crate::tracker::mode::TrackerMode;
 
 #[serde_as]
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]

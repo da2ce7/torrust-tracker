@@ -1,27 +1,28 @@
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::mpsc::error::SendError;
 use tokio::sync::{RwLock, RwLockReadGuard};
 
+use super::key;
+use super::mode::TrackerMode;
+use super::peer::TorrentPeer;
+use super::statistics::{TrackerStatistics, TrackerStatisticsEvent, TrackerStatsService};
 use crate::databases::database;
 use crate::databases::database::Database;
-use crate::mode::TrackerMode;
-use crate::old_settings::Settings;
-use crate::peer::TorrentPeer;
 use crate::protocol::common::InfoHash;
-use crate::statistics::{TrackerStatistics, TrackerStatisticsEvent, TrackerStatsService};
-use crate::tracker::key;
+use crate::settings::{CommonSettings, GlobalSettings};
 use crate::tracker::key::AuthKey;
 use crate::tracker::torrent::{TorrentEntry, TorrentError, TorrentStats};
 
 pub struct TorrentTracker {
-    pub settings: Arc<Settings>,
     pub mode: TrackerMode,
-    pub torrent_cleanup_interval: u64,
+    pub external_ip: Option<IpAddr>,
+    pub on_reverse_proxy: bool,
+    pub common: Arc<CommonSettings>,
     keys: RwLock<std::collections::HashMap<String, AuthKey>>,
     whitelist: RwLock<std::collections::HashSet<InfoHash>>,
     torrents: RwLock<std::collections::BTreeMap<InfoHash, TorrentEntry>>,
@@ -30,12 +31,17 @@ pub struct TorrentTracker {
 }
 
 impl TorrentTracker {
-    pub fn new(settings: Arc<Settings>, stats_tracker: Box<dyn TrackerStatsService>) -> Result<TorrentTracker, r2d2::Error> {
-        let database = database::connect_database(settings.db_driver.as_ref().unwrap(), &settings.db_path.as_ref().unwrap())?;
-
+    pub fn new(
+        global: &Arc<GlobalSettings>,
+        common: &Arc<CommonSettings>,
+        stats_tracker: Box<dyn TrackerStatsService>,
+        database: Box<dyn Database>,
+    ) -> Result<TorrentTracker, r2d2::Error> {
         Ok(TorrentTracker {
-            settings: settings.clone(),
-            mode: settings.mode.unwrap(),
+            mode: global.get_tracker_mode(),
+            external_ip: global.get_external_ip_opt().unwrap(),
+            on_reverse_proxy: global.is_on_reverse_proxy().unwrap(),
+            common: common.to_owned(),
             keys: RwLock::new(std::collections::HashMap::new()),
             whitelist: RwLock::new(std::collections::HashSet::new()),
             torrents: RwLock::new(std::collections::BTreeMap::new()),
@@ -212,7 +218,7 @@ impl TorrentTracker {
         let stats_updated = torrent_entry.update_peer(peer);
 
         // todo: move this action to a separate worker
-        if self.settings.persistent_torrent_completed_stat.unwrap() && stats_updated {
+        if self.common.enable_persistent_statistics.unwrap() && stats_updated {
             let _ = self
                 .database
                 .save_persistent_torrent(&info_hash, torrent_entry.completed)
@@ -245,18 +251,18 @@ impl TorrentTracker {
         let mut torrents_lock = self.torrents.write().await;
 
         // If we don't need to remove torrents we will use the faster iter
-        if self.settings.remove_peerless_torrents.unwrap() {
+        if self.common.enable_peerless_torrent_pruning.unwrap() {
             torrents_lock.retain(|_, torrent_entry| {
-                torrent_entry.remove_inactive_peers(self.settings.max_peer_timeout.unwrap());
+                torrent_entry.remove_inactive_peers(self.common.peer_timeout_seconds_maximum.unwrap());
 
-                match self.settings.persistent_torrent_completed_stat.unwrap() {
+                match self.common.enable_persistent_statistics.unwrap() {
                     true => torrent_entry.completed > 0 || torrent_entry.peers.len() > 0,
                     false => torrent_entry.peers.len() > 0,
                 }
             });
         } else {
             for (_, torrent_entry) in torrents_lock.iter_mut() {
-                torrent_entry.remove_inactive_peers(self.settings.max_peer_timeout.unwrap());
+                torrent_entry.remove_inactive_peers(self.common.peer_timeout_seconds_maximum.unwrap());
             }
         }
     }

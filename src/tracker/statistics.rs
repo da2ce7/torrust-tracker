@@ -181,7 +181,7 @@ impl TrackerStatsService for StatsTracker {}
 mod test {
 
     mod event_sender {
-        use crate::statistics::{StatsTracker, TrackerStatisticsEvent, TrackerStatisticsEventSender};
+        use crate::tracker::statistics::{StatsTracker, TrackerStatisticsEvent, TrackerStatisticsEventSender};
 
         #[tokio::test]
         async fn should_not_send_any_event_when_statistics_are_disabled() {

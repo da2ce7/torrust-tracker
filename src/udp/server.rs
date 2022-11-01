@@ -6,6 +6,8 @@ use aquatic_udp_protocol::Response;
 use log::{debug, info};
 use tokio::net::UdpSocket;
 
+use crate::errors::ServiceSettingsError;
+use crate::settings::ServiceSetting;
 use crate::tracker::tracker::TorrentTracker;
 use crate::udp::{handle_packet, MAX_PACKET_SIZE};
 
@@ -19,7 +21,7 @@ pub struct UdpServiceSettings {
 impl TryFrom<(&String, &ServiceSetting)> for UdpServiceSettings {
     type Error = ServiceSettingsError;
 
-    fn try_from(value: (&String, &ServiceSetting)) -> Result<Self, Self::Error> {
+    fn try_from(_value: (&String, &ServiceSetting)) -> Result<Self, Self::Error> {
         todo!()
     }
 }
@@ -30,8 +32,8 @@ pub struct UdpServer {
 }
 
 impl UdpServer {
-    pub async fn new(tracker: Arc<TorrentTracker>, bind_address: &str) -> tokio::io::Result<UdpServer> {
-        let socket = UdpSocket::bind(bind_address).await?;
+    pub async fn new(tracker: Arc<TorrentTracker>, socket_addr: &SocketAddr) -> tokio::io::Result<UdpServer> {
+        let socket = UdpSocket::bind(socket_addr).await?;
 
         Ok(UdpServer {
             socket: Arc::new(socket),

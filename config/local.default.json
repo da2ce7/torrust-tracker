@@ -1,11 +1,11 @@
 {
   "global": {
+    "tracker_mode": "public",
     "log_filter_level": "Info",
     "external_ip": "0.0.0.0",
-    "is_on_reverse_proxy": false
+    "on_reverse_proxy": false
   },
   "common": {
-    "tracker_mode": "public",
     "announce_interval_seconds": 120,
     "announce_interval_seconds_minimum": 120,
     "peer_timeout_seconds_maximum": 900,
@@ -16,7 +16,8 @@
   },
   "database": {
     "driver": "Sqlite3",
-    "path": "data.db"
+    "sql_lite_3_db_file_path": "data.db",
+    "my_sql_connection_url": null
   },
   "service": {
     "api_imported_0": {

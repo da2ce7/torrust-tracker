@@ -10,16 +10,30 @@ use r2d2_mysql::MysqlConnectionManager;
 
 use crate::databases::database;
 use crate::databases::database::{Database, Error};
+use crate::errors::DatabaseSettingsError;
+use crate::protocol::common::{InfoHash, AUTH_KEY_LENGTH};
+use crate::settings::DatabaseSettings;
 use crate::tracker::key::AuthKey;
-use crate::{InfoHash, AUTH_KEY_LENGTH};
+
+pub struct MySqlDatabaseSettings {
+    pub connection_url: String,
+}
+
+impl TryFrom<&DatabaseSettings> for MySqlDatabaseSettings {
+    type Error = DatabaseSettingsError;
+
+    fn try_from(_value: &DatabaseSettings) -> Result<Self, Self::Error> {
+        todo!()
+    }
+}
 
 pub struct MysqlDatabase {
     pool: Pool<MysqlConnectionManager>,
 }
 
 impl MysqlDatabase {
-    pub fn new(db_path: &str) -> Result<Self, r2d2::Error> {
-        let opts = Opts::from_url(&db_path).expect("Failed to connect to MySQL database.");
+    pub fn new(settings: &MySqlDatabaseSettings) -> Result<Self, r2d2::Error> {
+        let opts = Opts::from_url(&settings.connection_url).expect("Failed to connect to MySQL database.");
         let builder = OptsBuilder::from_opts(opts);
         let manager = MysqlConnectionManager::new(builder);
         let pool = r2d2::Pool::builder()
