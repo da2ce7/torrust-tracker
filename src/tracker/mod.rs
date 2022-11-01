@@ -6,6 +6,7 @@ pub mod torrent;
 pub mod tracker;
 
 pub mod helpers {
+    use std::net::IpAddr;
     use std::sync::Arc;
 
     use super::mode::TrackerMode;
@@ -45,7 +46,7 @@ pub mod helpers {
             }
         }
 
-        pub fn external_ip(external_ip: &str) -> Self {
+        pub fn external_ip(external_ip: &IpAddr) -> Self {
             let args = TrackerArgs::default();
 
             TrackerArgs {

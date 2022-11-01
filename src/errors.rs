@@ -1,4 +1,5 @@
 use std::net::AddrParseError;
+use std::path::PathBuf;
 
 use thiserror::Error;
 use warp::reject::Reject;
@@ -257,10 +258,10 @@ impl TlsSettingsError {
 #[derive(Error, Debug, Clone)]
 pub enum FilePathError {
     #[error("File Path failed to Canonicalize: {input}, {message}")]
-    FilePathIsUnresolvable { input: String, message: String },
+    FilePathIsUnresolvable { input: PathBuf, message: String },
 
     #[error("File Path destination is not a file: {input}")]
-    FilePathIsNotAFile { input: String },
+    FilePathIsNotAFile { input: PathBuf },
 }
 
 pub mod helpers {
@@ -268,20 +269,18 @@ pub mod helpers {
 
     use crate::errors::FilePathError;
 
-    pub fn get_existing_file_path(file_path: &String) -> Result<PathBuf, FilePathError> {
+    pub fn get_existing_file_path(file_path: &PathBuf) -> Result<PathBuf, FilePathError> {
         match Path::new(file_path).canonicalize() {
             Ok(path) => {
                 if path.is_file() {
                     Ok(path)
                 } else {
-                    Err(FilePathError::FilePathIsNotAFile {
-                        input: path.display().to_string(),
-                    })
+                    Err(FilePathError::FilePathIsNotAFile { input: path })
                 }
             }
 
             Err(error) => Err(FilePathError::FilePathIsUnresolvable {
-                input: file_path.clone(),
+                input: file_path.to_owned(),
                 message: error.to_string(),
             }),
         }

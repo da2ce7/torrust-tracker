@@ -59,6 +59,8 @@ async-trait = "0.1"
 
 aquatic_udp_protocol = "0.2"
 uuid = { version = "1", features = ["v4"] }
+serde_merge = "0.1.3"
+serde_yaml = "0.9.14"
 #taplo = "0.11.1"
 
 

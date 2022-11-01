@@ -210,7 +210,7 @@ mod tests {
     use uuid::Uuid;
 
     use crate::config_const::{CONFIG_FOLDER, CONFIG_LOCAL};
-    use crate::old_settings::Settings;
+    use crate::settings::old_settings::Settings;
 
     #[test]
     fn default_settings_should_contain_an_external_ip() {

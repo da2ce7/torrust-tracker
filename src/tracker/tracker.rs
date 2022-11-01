@@ -39,7 +39,7 @@ impl TorrentTracker {
     ) -> Result<TorrentTracker, r2d2::Error> {
         Ok(TorrentTracker {
             mode: global.get_tracker_mode(),
-            external_ip: global.get_external_ip_opt().unwrap(),
+            external_ip: global.get_external_ip_opt(),
             on_reverse_proxy: global.is_on_reverse_proxy().unwrap(),
             common: common.to_owned(),
             keys: RwLock::new(std::collections::HashMap::new()),

@@ -931,6 +931,7 @@ mod tests {
 
             mod from_a_loopback_ip {
                 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+                use std::str::FromStr;
                 use std::sync::Arc;
 
                 use aquatic_udp_protocol::{InfoHash as AquaticInfoHash, PeerId as AquaticPeerId};
@@ -943,7 +944,7 @@ mod tests {
 
                 #[tokio::test]
                 async fn the_peer_ip_should_be_changed_to_the_external_ip_in_the_tracker_configuration() {
-                    let args = TrackerArgs::external_ip("::126.0.0.1");
+                    let args = TrackerArgs::external_ip(&IpAddr::from_str("::126.0.0.1").unwrap());
                     let tracker = Arc::new(
                         TorrentTracker::new(&args.global, &args.common, (args.stats_tracker)(), (args.database)()).unwrap(),
                     );

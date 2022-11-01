@@ -13,8 +13,10 @@ use crate::errors::{
     CommonSettingsError, DatabaseSettingsError, GlobalSettingsError, ServiceSettingsError, SettingsError, TlsSettingsError,
     TrackerSettingsError,
 };
-use crate::old_settings;
 use crate::tracker::mode::TrackerMode;
+
+pub mod manager;
+pub mod old_settings;
 
 #[macro_export]
 macro_rules! old_to_new {
@@ -85,7 +87,7 @@ pub struct Settings {
 
 impl Settings {
     pub fn check(&self) -> Result<(), SettingsError> {
-        if self.namespace != SETTINGS_NAMESPACE.to_string() {
+        if self.namespace != *SETTINGS_NAMESPACE {
             return Err(SettingsError::NamespaceError {
                 message: format!("Actual: \"{}\", Expected: \"{}\"", self.namespace, SETTINGS_NAMESPACE),
                 field: "tracker".to_string(),
@@ -93,7 +95,7 @@ impl Settings {
         }
 
         // Todo: Make this Check use Semantic Versioning 2.0.0
-        if self.version != SETTINGS_VERSION.to_string() {
+        if self.version != *SETTINGS_VERSION {
             return Err(SettingsError::VersionError {
                 message: format!("Actual: \"{}\", Expected: \"{}\"", self.version, SETTINGS_NAMESPACE),
                 field: "version".to_string(),
@@ -239,7 +241,9 @@ impl TrackerSettingsBuilder {
             if let Some(val) = old_settings.db_path.as_ref() {
                 match driver {
                     DatabaseDrivers::Sqlite3 => {
-                        self.tracker_settings.database.as_mut().unwrap().sql_lite_3_db_file_path = Some(val.to_owned())
+                        if let Ok(path) = PathBuf::from_str(val) {
+                            self.tracker_settings.database.as_mut().unwrap().sql_lite_3_db_file_path = Some(path);
+                        }
                     }
                     DatabaseDrivers::MySQL => {
                         self.tracker_settings.database.as_mut().unwrap().my_sql_connection_url = Some(val.to_owned())
@@ -265,14 +269,13 @@ impl TrackerSettingsBuilder {
 pub struct GlobalSettings {
     tracker_mode: Option<TrackerMode>,
     log_filter_level: Option<LogFilterLevel>,
-    external_ip: Option<String>,
+    external_ip: Option<IpAddr>,
     on_reverse_proxy: Option<bool>,
 }
 
 impl GlobalSettings {
     fn check(&self) -> Result<(), GlobalSettingsError> {
         self.is_on_reverse_proxy()?;
-        self.get_external_ip_opt()?;
 
         Ok(())
     }
@@ -292,19 +295,8 @@ impl GlobalSettings {
         }
     }
 
-    pub fn get_external_ip_opt(&self) -> Result<Option<IpAddr>, GlobalSettingsError> {
-        match self.external_ip.as_ref().filter(|ip| !ip.is_empty()) {
-            Some(ip) => match IpAddr::from_str(ip) {
-                Ok(ip) => Ok(Some(ip)),
-                Err(error) => Err(GlobalSettingsError::ExternalIpBadSyntax {
-                    field: "external_ip".to_string(),
-                    input: ip.to_owned(),
-                    source: error,
-                    data: self.to_owned(),
-                }),
-            },
-            None => Ok(None),
-        }
+    pub fn get_external_ip_opt(&self) -> Option<IpAddr> {
+        self.external_ip
     }
 
     pub fn is_on_reverse_proxy(&self) -> Result<bool, GlobalSettingsError> {
@@ -354,13 +346,13 @@ impl GlobalSettingsBuilder {
             global_settings: GlobalSettings {
                 tracker_mode: Some(TrackerMode::Listed),
                 log_filter_level: Some(LogFilterLevel::Info),
-                external_ip: Some("".to_string()),
+                external_ip: None,
                 on_reverse_proxy: Some(false),
             },
         }
     }
 
-    pub fn with_external_ip(mut self, external_ip: &str) -> Self {
+    pub fn with_external_ip(mut self, external_ip: &IpAddr) -> Self {
         self.global_settings.external_ip = Some(external_ip.to_owned());
         self
     }
@@ -396,7 +388,9 @@ impl GlobalSettingsBuilder {
         }
 
         if let Some(val) = old_settings.external_ip.as_ref() {
-            self.global_settings.external_ip = Some(val.clone());
+            if let Ok(ip) = IpAddr::from_str(val) {
+                self.global_settings.external_ip = Some(ip);
+            };
         }
 
         if let Some(val) = old_settings.on_reverse_proxy {
@@ -501,7 +495,7 @@ impl CommonSettingsBuilder {
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Default, Hash)]
 pub struct DatabaseSettings {
     driver: Option<DatabaseDrivers>,
-    sql_lite_3_db_file_path: Option<String>,
+    sql_lite_3_db_file_path: Option<PathBuf>,
     my_sql_connection_url: Option<String>,
 }
 
@@ -526,7 +520,7 @@ impl DatabaseSettings {
     }
 
     pub fn get_slq_lite_3_file_path(&self) -> Result<PathBuf, DatabaseSettingsError> {
-        check_field_is_not_empty!(self => DatabaseSettingsError; sql_lite_3_db_file_path: String);
+        check_field_is_not_empty!(self => DatabaseSettingsError; sql_lite_3_db_file_path: PathBuf);
 
         // todo: more checks here.
         Ok(Path::new(self.sql_lite_3_db_file_path.as_ref().unwrap()).to_path_buf())
@@ -578,7 +572,7 @@ impl DatabaseSettingsBuilder {
         Self {
             database_settings: DatabaseSettings {
                 driver: Some(DatabaseDrivers::Sqlite3),
-                sql_lite_3_db_file_path: Some("data.db".to_string()),
+                sql_lite_3_db_file_path: Some(PathBuf::from_str("data.db").unwrap()),
                 my_sql_connection_url: None,
             },
         }
@@ -590,7 +584,7 @@ pub struct ServiceSetting {
     pub enabled: Option<bool>,
     pub display_name: Option<String>,
     pub service: Option<ServiceProtocol>,
-    pub socket: Option<String>,
+    pub socket: Option<SocketAddr>,
     pub tls: Option<TlsSettings>,
     pub access_tokens: Option<BTreeMap<String, String>>,
 }
@@ -600,10 +594,10 @@ pub type Services = BTreeMap<String, ServiceSetting>;
 impl ServiceSetting {
     fn check(&self) -> Result<(), ServiceSettingsError> {
         check_field_is_not_none!(self => ServiceSettingsError;
-        enabled, service);
+        enabled, service, socket);
 
         check_field_is_not_empty!(self => ServiceSettingsError;
-            display_name: String, socket: String);
+            display_name: String);
 
         match self.service.unwrap() {
             ServiceProtocol::API => {
@@ -638,18 +632,9 @@ impl ServiceSetting {
     }
 
     pub fn get_socket(&self) -> Result<SocketAddr, ServiceSettingsError> {
-        check_field_is_not_empty!(self => ServiceSettingsError;
-            socket: String);
+        check_field_is_not_none!(self => ServiceSettingsError; socket);
 
-        match self.socket.as_ref().unwrap().parse::<SocketAddr>() {
-            Ok(socket) => Ok(socket),
-            Err(source) => Err(ServiceSettingsError::BindingAddressBadSyntax {
-                field: "socket".to_string(),
-                input: self.socket.as_ref().unwrap().to_string(),
-                source,
-                data: self.to_owned(),
-            }),
-        }
+        Ok(self.socket.unwrap())
     }
 }
 
@@ -699,7 +684,7 @@ impl ServicesBuilder {
             enabled: Some(false),
             display_name: Some("HTTP API (default)".to_string()),
             service: Some(ServiceProtocol::API),
-            socket: Some("127.0.0.1:1212".to_string()),
+            socket: Some(SocketAddr::from_str("127.0.0.1:1212").unwrap()),
             tls: None,
             access_tokens: Some(access_tokens),
         };
@@ -708,7 +693,7 @@ impl ServicesBuilder {
             enabled: Some(false),
             display_name: Some("UDP (default)".to_string()),
             service: Some(ServiceProtocol::UDP),
-            socket: Some("0.0.0.0:6969".to_string()),
+            socket: Some(SocketAddr::from_str("0.0.0.0:6969").unwrap()),
             tls: None,
             access_tokens: None,
         };
@@ -717,7 +702,7 @@ impl ServicesBuilder {
             enabled: Some(false),
             display_name: Some("HTTP (default)".to_string()),
             service: Some(ServiceProtocol::HTTP),
-            socket: Some("0.0.0.0:6969".to_string()),
+            socket: Some(SocketAddr::from_str("0.0.0.0:6969").unwrap()),
             tls: None,
             access_tokens: None,
         };
@@ -726,10 +711,10 @@ impl ServicesBuilder {
             enabled: Some(false),
             display_name: Some("TLS (default)".to_string()),
             service: Some(ServiceProtocol::HTTP),
-            socket: Some("0.0.0.0:6969".to_string()),
+            socket: Some(SocketAddr::from_str("0.0.0.0:6969").unwrap()),
             tls: Some(TlsSettings {
-                certificate_file_path: Some("".to_string()),
-                key_file_path: Some("".to_string()),
+                certificate_file_path: Some(PathBuf::default()),
+                key_file_path: Some(PathBuf::default()),
             }),
             access_tokens: None,
         };
@@ -756,7 +741,11 @@ impl ServicesBuilder {
                     enabled: api.enabled,
                     display_name: Some("HTTP API (imported)".to_string()),
                     service: Some(ServiceProtocol::API),
-                    socket: api.bind_address.clone(),
+                    socket: api
+                        .bind_address
+                        .as_ref()
+                        .map(|socket| SocketAddr::from_str(socket.as_str()).ok())
+                        .unwrap_or(None),
                     tls: None,
                     access_tokens: api.access_tokens.clone(),
                 },
@@ -771,7 +760,11 @@ impl ServicesBuilder {
                         enabled: service.enabled,
                         display_name: Some("UDP Service (imported)".to_string()),
                         service: Some(ServiceProtocol::UDP),
-                        socket: service.bind_address.clone(),
+                        socket: service
+                            .bind_address
+                            .as_ref()
+                            .map(|socket| SocketAddr::from_str(socket.as_str()).ok())
+                            .unwrap_or(None),
                         tls: None,
                         access_tokens: None,
                     },
@@ -788,7 +781,11 @@ impl ServicesBuilder {
                             enabled: service.enabled,
                             display_name: Some("HTTP Service(imported)".to_string()),
                             service: Some(ServiceProtocol::HTTP),
-                            socket: service.bind_address.clone(),
+                            socket: service
+                                .bind_address
+                                .as_ref()
+                                .map(|socket| SocketAddr::from_str(socket.as_str()).ok())
+                                .unwrap_or(None),
                             tls: None,
                             access_tokens: None,
                         },
@@ -800,10 +797,26 @@ impl ServicesBuilder {
                             enabled: service.enabled,
                             display_name: Some("TLS Service (imported)".to_string()),
                             service: Some(ServiceProtocol::TLS),
-                            socket: service.bind_address.clone(),
+                            socket: service
+                                .bind_address
+                                .as_ref()
+                                .map(|socket| SocketAddr::from_str(socket.as_str()).ok())
+                                .unwrap_or(None),
                             tls: Some(TlsSettings {
-                                certificate_file_path: service.ssl_cert_path.clone(),
-                                key_file_path: service.ssl_key_path.clone(),
+                                certificate_file_path: {
+                                    service
+                                        .ssl_cert_path
+                                        .as_ref()
+                                        .map(|path| PathBuf::from_str(path.as_str()).ok())
+                                        .unwrap_or(None)
+                                },
+                                key_file_path: {
+                                    service
+                                        .ssl_key_path
+                                        .as_ref()
+                                        .map(|path| PathBuf::from_str(path.as_str()).ok())
+                                        .unwrap_or(None)
+                                },
                             }),
                             access_tokens: None,
                         },
@@ -833,22 +846,22 @@ impl ServicesBuilder {
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Hash)]
 pub struct TlsSettings {
-    pub certificate_file_path: Option<String>,
-    pub key_file_path: Option<String>,
+    pub certificate_file_path: Option<PathBuf>,
+    pub key_file_path: Option<PathBuf>,
 }
 
 impl TlsSettings {
     fn check(&self) -> Result<(), TlsSettingsError> {
         check_field_is_not_empty!(self => TlsSettingsError;
-            certificate_file_path: String,
-            key_file_path: String);
+            certificate_file_path: PathBuf,
+            key_file_path: PathBuf);
 
         Ok(())
     }
 
     pub fn get_certificate_file_path(&self) -> Result<PathBuf, TlsSettingsError> {
         check_field_is_not_empty!(self => TlsSettingsError;
-            certificate_file_path: String);
+            certificate_file_path: PathBuf);
 
         match get_existing_file_path(self.certificate_file_path.as_ref().unwrap()) {
             Ok(path) => Ok(path),
@@ -861,7 +874,7 @@ impl TlsSettings {
 
     pub fn get_key_file_path(&self) -> Result<PathBuf, TlsSettingsError> {
         check_field_is_not_empty!(self => TlsSettingsError;
-            key_file_path: String);
+            key_file_path: PathBuf);
 
         match get_existing_file_path(self.key_file_path.as_ref().unwrap()) {
             Ok(path) => Ok(path),
@@ -900,16 +913,16 @@ mod tests {
 
     use config::Config;
 
+    use super::old_settings::Settings;
     use super::{TrackerSettings, TrackerSettingsBuilder};
     use crate::config_const::{CONFIG_DEFAULT, CONFIG_FOLDER, CONFIG_LOCAL};
-    use crate::old_settings::Settings;
 
     #[test]
     fn write_test_configuration() {
         let local_source = Path::new(CONFIG_FOLDER).join(CONFIG_DEFAULT);
         let json_string = serde_json::to_string_pretty(&TrackerSettingsBuilder::default().tracker_settings).unwrap();
 
-        fs::write(local_source.with_extension("new.json"), json_string).unwrap()
+        fs::write(local_source.with_extension("old.json"), json_string).unwrap()
     }
 
     #[test]
@@ -952,7 +965,7 @@ mod tests {
         let local_source = Path::new(CONFIG_FOLDER).join(CONFIG_LOCAL);
         let json_string = serde_json::to_string_pretty(&builder.tracker_settings).unwrap();
 
-        fs::write(local_source.with_extension("new.json"), json_string).unwrap()
+        fs::write(local_source.with_extension("old.json"), json_string).unwrap()
     }
 
     #[test]
