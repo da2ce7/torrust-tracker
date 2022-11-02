@@ -9,7 +9,7 @@ use warp::{filters, reply, serve, Filter};
 
 use crate::errors::ServiceSettingsError;
 use crate::protocol::common::*;
-use crate::settings::ServiceSetting;
+use crate::settings::ServiceSettings;
 use crate::tracker::peer::TorrentPeer;
 use crate::tracker::tracker::TorrentTracker;
 
@@ -21,10 +21,10 @@ pub struct ApiServiceSettings {
     pub access_tokens: BTreeMap<String, String>,
 }
 
-impl TryFrom<(&String, &ServiceSetting)> for ApiServiceSettings {
+impl TryFrom<(&String, &ServiceSettings)> for ApiServiceSettings {
     type Error = ServiceSettingsError;
 
-    fn try_from(_value: (&String, &ServiceSetting)) -> Result<Self, Self::Error> {
+    fn try_from(_value: (&String, &ServiceSettings)) -> Result<Self, Self::Error> {
         todo!()
     }
 }

@@ -15,7 +15,7 @@ pub mod config_const {
     pub const CONFIG_DEFAULT: &str = "default";
     pub const CONFIG_LOCAL: &str = "local";
     pub const CONFIG_OVERRIDE: &str = "override";
-    pub const CONFIG_OLD_LOCAL: &str = "../config";
+    pub const CONFIG_OLD: &str = "../config";
 }
 
 #[macro_use]

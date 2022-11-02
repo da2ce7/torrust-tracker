@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::errors::ServiceSettingsError;
 use crate::http::routes;
-use crate::settings::ServiceSetting;
+use crate::settings::ServiceSettings;
 use crate::tracker::tracker::TorrentTracker;
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -14,10 +14,10 @@ pub struct HttpServiceSettings {
     pub socket: SocketAddr,
 }
 
-impl TryFrom<(&String, &ServiceSetting)> for HttpServiceSettings {
+impl TryFrom<(&String, &ServiceSettings)> for HttpServiceSettings {
     type Error = ServiceSettingsError;
 
-    fn try_from(_value: (&String, &ServiceSetting)) -> Result<Self, Self::Error> {
+    fn try_from(_value: (&String, &ServiceSettings)) -> Result<Self, Self::Error> {
         todo!()
     }
 }
@@ -31,10 +31,10 @@ pub struct TlsServiceSettings {
     pub key_file_path: PathBuf,
 }
 
-impl TryFrom<(&String, &ServiceSetting)> for TlsServiceSettings {
+impl TryFrom<(&String, &ServiceSettings)> for TlsServiceSettings {
     type Error = ServiceSettingsError;
 
-    fn try_from(_value: (&String, &ServiceSetting)) -> Result<Self, Self::Error> {
+    fn try_from(_value: (&String, &ServiceSettings)) -> Result<Self, Self::Error> {
         todo!()
     }
 }

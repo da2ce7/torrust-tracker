@@ -7,7 +7,7 @@ use log::{debug, info};
 use tokio::net::UdpSocket;
 
 use crate::errors::ServiceSettingsError;
-use crate::settings::ServiceSetting;
+use crate::settings::ServiceSettings;
 use crate::tracker::tracker::TorrentTracker;
 use crate::udp::{handle_packet, MAX_PACKET_SIZE};
 
@@ -18,10 +18,10 @@ pub struct UdpServiceSettings {
     pub socket: SocketAddr,
 }
 
-impl TryFrom<(&String, &ServiceSetting)> for UdpServiceSettings {
+impl TryFrom<(&String, &ServiceSettings)> for UdpServiceSettings {
     type Error = ServiceSettingsError;
 
-    fn try_from(_value: (&String, &ServiceSetting)) -> Result<Self, Self::Error> {
+    fn try_from(_value: (&String, &ServiceSettings)) -> Result<Self, Self::Error> {
         todo!()
     }
 }

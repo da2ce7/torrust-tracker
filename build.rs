@@ -17,7 +17,7 @@ pub mod config_const {
 fn main() {
     let config_folder = Path::new(CONFIG_FOLDER);
     let target_folder = env::var_os("OUT_DIR").map(PathBuf::from).unwrap().join("../../..");
-    let local_source = config_folder.join(CONFIG_LOCAL).with_extension("toml");
+    let local_source = config_folder.join(CONFIG_LOCAL).with_extension("json");
     let local_backup_folder = config_folder.with_extension("backup");
     let local_backup = local_backup_folder.join(CONFIG_LOCAL);
 
@@ -47,8 +47,8 @@ fn main() {
     }
 
     // Re-runs script if any files in config are changed
-    println!("cargo:rerun-if-changed=config/*");
-    copy_to_target(config_folder, &target_folder).expect("Could not copy");
+    // println!("cargo:rerun-if-changed=config/*");
+    // copy_to_target(config_folder, &target_folder).expect("Could not copy");
 }
 
 pub fn copy_to_target(path: &Path, target: &Path) -> Result<u64, fs_extra::error::Error> {

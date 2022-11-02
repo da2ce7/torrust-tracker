@@ -42,7 +42,7 @@ macro_rules! check_field_is_not_none {
                 if $ctx.$value.is_none() {
                     return Err($error::MissingRequiredField {
                         field: format!("{}", stringify!($value)),
-                        data: $ctx.to_owned(),
+                        data: $ctx.into(),
                     })
                 };
             )+
@@ -61,13 +61,13 @@ macro_rules! check_field_is_not_empty {
                         if value == &<$value_type>::default(){
                         return Err($error::EmptyRequiredField {
                             field: format!("{}", stringify!($value)),
-                            data: $ctx.to_owned()});
+                            data: $ctx.into()});
                         }
                     },
                     None => {
                         return Err($error::MissingRequiredField {
                             field: format!("{}", stringify!($value)),
-                            data: $ctx.to_owned(),
+                            data: $ctx.into(),
                         });
                     },
                 }
@@ -141,19 +141,19 @@ pub struct TrackerSettings {
     pub global: Option<GlobalSettings>,
     pub common: Option<CommonSettings>,
     pub database: Option<DatabaseSettings>,
-    pub service: Option<Services>,
+    pub services: Option<Services>,
 }
 
 impl TrackerSettings {
     fn check(&self) -> Result<(), TrackerSettingsError> {
-        check_field_is_not_none!(self => TrackerSettingsError;
-            global, common, database, service
+        check_field_is_not_none!(self.to_owned() => TrackerSettingsError;
+            global, common, database, services
         );
         Ok(())
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TrackerSettingsBuilder {
     tracker_settings: TrackerSettings,
 }
@@ -182,7 +182,7 @@ impl TryInto<TrackerSettings> for TrackerSettingsBuilder {
             global: Some(GlobalSettingsBuilder::from(&self.tracker_settings.global.unwrap()).try_into()?),
             common: Some(CommonSettingsBuilder::from(&self.tracker_settings.common.unwrap()).try_into()?),
             database: Some(DatabaseSettingsBuilder::from(&self.tracker_settings.database.unwrap()).try_into()?),
-            service: match self.tracker_settings.service {
+            services: match self.tracker_settings.services {
                 Some(services) => Some(ServicesBuilder::from(&services).try_into()?),
                 None => None,
             },
@@ -205,14 +205,53 @@ impl TrackerSettingsBuilder {
                 global: Some(GlobalSettingsBuilder::default().global_settings),
                 common: Some(CommonSettingsBuilder::default().common_settings),
                 database: Some(DatabaseSettingsBuilder::default().database_settings),
-                service: Some(ServicesBuilder::default().services),
+                services: Some(ServicesBuilder::default().services),
             },
         }
     }
 
-    pub fn with_global(mut self, global: &GlobalSettings) -> Self {
-        self.tracker_settings.global = Some(global.to_owned());
-        self
+    pub fn with_global(self, global: &GlobalSettings) -> Self {
+        Self {
+            tracker_settings: TrackerSettings {
+                global: Some(global.to_owned()),
+                common: self.tracker_settings.common,
+                database: self.tracker_settings.database,
+                services: self.tracker_settings.services,
+            },
+        }
+    }
+
+    pub fn with_common(self, common: &CommonSettings) -> Self {
+        Self {
+            tracker_settings: TrackerSettings {
+                global: self.tracker_settings.global,
+                common: Some(common.to_owned()),
+                database: self.tracker_settings.database,
+                services: self.tracker_settings.services,
+            },
+        }
+    }
+
+    pub fn with_database(self, database: &DatabaseSettings) -> Self {
+        Self {
+            tracker_settings: TrackerSettings {
+                global: self.tracker_settings.global,
+                common: self.tracker_settings.common,
+                database: Some(database.to_owned()),
+                services: self.tracker_settings.services,
+            },
+        }
+    }
+
+    pub fn with_services(self, services: &Services) -> Self {
+        Self {
+            tracker_settings: TrackerSettings {
+                global: self.tracker_settings.global,
+                common: self.tracker_settings.common,
+                database: self.tracker_settings.database,
+                services: Some(services.to_owned()),
+            },
+        }
     }
 
     pub fn import_old(mut self, old_settings: &old_settings::Settings) -> Self {
@@ -258,13 +297,13 @@ impl TrackerSettingsBuilder {
         }
 
         // Services
-        let mut builder = match self.tracker_settings.service.as_ref() {
+        let mut builder = match self.tracker_settings.services.as_ref() {
             Some(settings) => ServicesBuilder::from(settings),
             None => ServicesBuilder::empty(),
         };
         builder = builder.import_old(old_settings);
 
-        self.tracker_settings.service = Some(builder.services);
+        self.tracker_settings.services = Some(builder.services);
 
         self
     }
@@ -305,7 +344,7 @@ impl GlobalSettings {
     }
 
     pub fn is_on_reverse_proxy(&self) -> Result<bool, GlobalSettingsError> {
-        check_field_is_not_none!(self => GlobalSettingsError; on_reverse_proxy);
+        check_field_is_not_none!(self.to_owned() => GlobalSettingsError; on_reverse_proxy);
 
         Ok(self.on_reverse_proxy.unwrap())
     }
@@ -378,7 +417,14 @@ impl GlobalSettingsBuilder {
     }
 
     pub fn import_old(mut self, old_settings: &old_settings::Settings) -> Self {
-        old_to_new!(old_settings, self.global_settings; mode: tracker_mode);
+        if let Some(val) = old_settings.mode.as_ref() {
+            self.global_settings.tracker_mode = Some(match val {
+                old_settings::TrackerModeOld::Public => TrackerMode::Public,
+                old_settings::TrackerModeOld::Listed => TrackerMode::Listed,
+                old_settings::TrackerModeOld::Private => TrackerMode::Private,
+                old_settings::TrackerModeOld::PrivateListed => TrackerMode::PrivateListed,
+            })
+        }
 
         if let Some(val) = old_settings.log_level.as_ref() {
             self.global_settings.log_filter_level = match val.to_lowercase().as_str() {
@@ -418,13 +464,13 @@ pub struct CommonSettings {
 
 impl CommonSettings {
     fn check(&self) -> Result<(), CommonSettingsError> {
-        check_field_is_not_none!(self => CommonSettingsError;
+        check_field_is_not_none!(self.to_owned() => CommonSettingsError;
             enable_tracker_usage_statistics,
             enable_persistent_statistics,
             enable_peerless_torrent_pruning
         );
 
-        check_field_is_not_empty!(self => CommonSettingsError;
+        check_field_is_not_empty!(self.to_owned() => CommonSettingsError;
             announce_interval_seconds: u32,
             announce_interval_seconds_minimum: u32,
             peer_timeout_seconds_maximum: u32,
@@ -519,20 +565,20 @@ impl DatabaseSettings {
     }
 
     pub fn get_driver(&self) -> Result<DatabaseDrivers, DatabaseSettingsError> {
-        check_field_is_not_none!(self => DatabaseSettingsError; driver);
+        check_field_is_not_none!(self.to_owned() => DatabaseSettingsError; driver);
 
         Ok(self.driver.unwrap())
     }
 
     pub fn get_slq_lite_3_file_path(&self) -> Result<PathBuf, DatabaseSettingsError> {
-        check_field_is_not_empty!(self => DatabaseSettingsError; sql_lite_3_db_file_path: PathBuf);
+        check_field_is_not_empty!(self.to_owned() => DatabaseSettingsError; sql_lite_3_db_file_path: PathBuf);
 
         // todo: more checks here.
         Ok(Path::new(self.sql_lite_3_db_file_path.as_ref().unwrap()).to_path_buf())
     }
 
     pub fn get_my_sql_connection_url(&self) -> Result<String, DatabaseSettingsError> {
-        check_field_is_not_empty!(self => DatabaseSettingsError; my_sql_connection_url: String);
+        check_field_is_not_empty!(self.to_owned() => DatabaseSettingsError; my_sql_connection_url: String);
 
         // todo: more checks here.
         Ok(self.my_sql_connection_url.to_owned().unwrap())
@@ -584,8 +630,9 @@ impl DatabaseSettingsBuilder {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Default, Hash)]
-pub struct ServiceSetting {
+/// Special Service Settings with the Private Access Secrets Removed
+#[derive(PartialEq, Eq, Debug, Clone, Default, Hash)]
+pub struct ServiceSettingClean {
     pub enabled: Option<bool>,
     pub display_name: Option<String>,
     pub service: Option<ServiceProtocol>,
@@ -594,9 +641,39 @@ pub struct ServiceSetting {
     pub access_tokens: Option<BTreeMap<String, String>>,
 }
 
-pub type Services = BTreeMap<String, ServiceSetting>;
+impl From<&ServiceSettings> for ServiceSettingClean {
+    fn from(services: &ServiceSettings) -> Self {
+        Self {
+            enabled: services.enabled,
+            display_name: services.display_name.to_owned(),
+            service: services.service,
+            socket: services.socket,
+            tls: services.tls.to_owned(),
+            access_tokens: {
+                services.access_tokens.as_ref().map(|access_tokens| {
+                    access_tokens
+                        .iter()
+                        .map(|pair| (pair.0.to_owned(), "SECRET_REMOVED".to_string()))
+                        .collect()
+                })
+            },
+        }
+    }
+}
 
-impl ServiceSetting {
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Default, Hash)]
+pub struct ServiceSettings {
+    pub enabled: Option<bool>,
+    pub display_name: Option<String>,
+    pub service: Option<ServiceProtocol>,
+    pub socket: Option<SocketAddr>,
+    pub tls: Option<TlsSettings>,
+    pub access_tokens: Option<BTreeMap<String, String>>,
+}
+
+pub type Services = BTreeMap<String, ServiceSettings>;
+
+impl ServiceSettings {
     fn check(&self) -> Result<(), ServiceSettingsError> {
         check_field_is_not_none!(self => ServiceSettingsError;
         enabled, service, socket);
@@ -609,7 +686,7 @@ impl ServiceSetting {
                 if self.access_tokens.as_ref().filter(|f| !f.is_empty()).is_none() {
                     return Err(ServiceSettingsError::ApiRequiresAccessToken {
                         field: "access_tokens".to_string(),
-                        data: self.to_owned(),
+                        data: self.into(),
                     });
                 };
             }
@@ -619,14 +696,14 @@ impl ServiceSetting {
                         return Err(ServiceSettingsError::TlsSettingsError {
                             field: format!("tls.{}", source.get_field()),
                             source,
-                            data: self.to_owned(),
+                            data: self.into(),
                         });
                     }
                 }
                 None => {
                     return Err(ServiceSettingsError::TlsRequiresTlsConfig {
                         field: "tls".to_string(),
-                        data: self.to_owned(),
+                        data: self.into(),
                     });
                 }
             },
@@ -685,7 +762,7 @@ impl ServicesBuilder {
         let mut access_tokens = BTreeMap::new();
         access_tokens.insert("admin".to_string(), "password".to_string());
 
-        let api = ServiceSetting {
+        let api = ServiceSettings {
             enabled: Some(false),
             display_name: Some("HTTP API (default)".to_string()),
             service: Some(ServiceProtocol::Api),
@@ -694,7 +771,7 @@ impl ServicesBuilder {
             access_tokens: Some(access_tokens),
         };
 
-        let udp = ServiceSetting {
+        let udp = ServiceSettings {
             enabled: Some(false),
             display_name: Some("UDP (default)".to_string()),
             service: Some(ServiceProtocol::Udp),
@@ -703,7 +780,7 @@ impl ServicesBuilder {
             access_tokens: None,
         };
 
-        let http = ServiceSetting {
+        let http = ServiceSettings {
             enabled: Some(false),
             display_name: Some("HTTP (default)".to_string()),
             service: Some(ServiceProtocol::Http),
@@ -712,7 +789,7 @@ impl ServicesBuilder {
             access_tokens: None,
         };
 
-        let tls = ServiceSetting {
+        let tls = ServiceSettings {
             enabled: Some(false),
             display_name: Some("TLS (default)".to_string()),
             service: Some(ServiceProtocol::Http),
@@ -734,15 +811,34 @@ impl ServicesBuilder {
         Self { services }
     }
 
+    /// will remove the services that failed the configuration check, returns removed services.
+    fn remove_check_fail(&mut self) -> Services {
+        let removed = self
+            .services
+            .iter()
+            .filter(|service| service.1.check().is_err())
+            .map(|pair| (pair.0.to_owned(), pair.1.to_owned()))
+            .collect();
+
+        self.services = self
+            .services
+            .iter()
+            .filter(|service| service.1.check().is_ok())
+            .map(|pair| (pair.0.to_owned(), pair.1.to_owned()))
+            .collect();
+
+        removed
+    }
+
     pub fn import_old(mut self, old_settings: &old_settings::Settings) -> Self {
         let existing_service_map = self.services.clone();
-        let existing_services: HashSet<&ServiceSetting, RandomState> = HashSet::from_iter(existing_service_map.values());
+        let existing_services: HashSet<&ServiceSettings, RandomState> = HashSet::from_iter(existing_service_map.values());
 
-        let mut new_values: HashSet<(ServiceSetting, String)> = HashSet::new();
+        let mut new_values: HashSet<(ServiceSettings, String)> = HashSet::new();
 
         if let Some(api) = old_settings.http_api.as_ref() {
             new_values.insert((
-                ServiceSetting {
+                ServiceSettings {
                     enabled: api.enabled,
                     display_name: Some("HTTP API (imported)".to_string()),
                     service: Some(ServiceProtocol::Api),
@@ -761,7 +857,7 @@ impl ServicesBuilder {
         if let Some(udp) = old_settings.udp_trackers.as_ref() {
             for service in udp {
                 new_values.insert((
-                    ServiceSetting {
+                    ServiceSettings {
                         enabled: service.enabled,
                         display_name: Some("UDP Service (imported)".to_string()),
                         service: Some(ServiceProtocol::Udp),
@@ -782,7 +878,7 @@ impl ServicesBuilder {
             for service in http_or_tls {
                 new_values.insert(if service.ssl_enabled.unwrap_or_default() {
                     (
-                        ServiceSetting {
+                        ServiceSettings {
                             enabled: service.enabled,
                             display_name: Some("HTTP Service(imported)".to_string()),
                             service: Some(ServiceProtocol::Http),
@@ -798,7 +894,7 @@ impl ServicesBuilder {
                     )
                 } else {
                     (
-                        ServiceSetting {
+                        ServiceSettings {
                             enabled: service.enabled,
                             display_name: Some("TLS Service (imported)".to_string()),
                             service: Some(ServiceProtocol::Tls),
@@ -857,7 +953,7 @@ pub struct TlsSettings {
 
 impl TlsSettings {
     fn check(&self) -> Result<(), TlsSettingsError> {
-        check_field_is_not_empty!(self => TlsSettingsError;
+        check_field_is_not_empty!(self.to_owned() => TlsSettingsError;
             certificate_file_path: PathBuf,
             key_file_path: PathBuf);
 
@@ -865,7 +961,7 @@ impl TlsSettings {
     }
 
     pub fn get_certificate_file_path(&self) -> Result<PathBuf, TlsSettingsError> {
-        check_field_is_not_empty!(self => TlsSettingsError;
+        check_field_is_not_empty!(self.to_owned() => TlsSettingsError;
             certificate_file_path: PathBuf);
 
         match get_existing_file_path(self.certificate_file_path.as_ref().unwrap()) {
@@ -878,7 +974,7 @@ impl TlsSettings {
     }
 
     pub fn get_key_file_path(&self) -> Result<PathBuf, TlsSettingsError> {
-        check_field_is_not_empty!(self => TlsSettingsError;
+        check_field_is_not_empty!(self.to_owned() => TlsSettingsError;
             key_file_path: PathBuf);
 
         match get_existing_file_path(self.key_file_path.as_ref().unwrap()) {
@@ -915,83 +1011,4 @@ pub enum ServiceProtocol {
     Http,
     Tls,
     Api,
-}
-
-#[cfg(test)]
-mod tests {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-    use std::path::Path;
-    use std::{env, fs};
-
-    use config::Config;
-
-    use super::old_settings::Settings;
-    use super::{TrackerSettings, TrackerSettingsBuilder};
-    use crate::config_const::{CONFIG_DEFAULT, CONFIG_FOLDER, CONFIG_LOCAL};
-
-    #[test]
-    fn write_test_configuration() {
-        let local_source = Path::new(CONFIG_FOLDER).join(CONFIG_DEFAULT);
-        let json_string = serde_json::to_string_pretty(&TrackerSettingsBuilder::default().tracker_settings).unwrap();
-
-        fs::write(local_source.with_extension("old.json"), json_string).unwrap()
-    }
-
-    #[test]
-    fn default_settings_should_be_complete() {
-        let default_settings_builder = TrackerSettingsBuilder::default();
-
-        let _: TrackerSettings = default_settings_builder.try_into().unwrap();
-    }
-
-    #[test]
-    fn default_config_should_roundtrip() {
-        let term_dir = env::temp_dir();
-        let default_settings = &TrackerSettingsBuilder::default().tracker_settings;
-        let settings_json = serde_json::to_string_pretty(default_settings).unwrap();
-
-        let mut hasher = DefaultHasher::new();
-        settings_json.hash(&mut hasher);
-        let temp_file_path = &term_dir.join(format!("test-{}", hasher.finish())).with_extension("json");
-
-        fs::write(temp_file_path, settings_json).unwrap();
-
-        let settings2: TrackerSettings = Config::builder()
-            .add_source(config::File::from(temp_file_path.as_path()))
-            .build()
-            .unwrap()
-            .try_deserialize()
-            .unwrap();
-
-        assert_eq!(default_settings, &settings2);
-    }
-
-    #[test]
-    fn load_old_settings() {
-        let old_settings = Settings::default().unwrap();
-
-        let mut builder = TrackerSettingsBuilder::from(&TrackerSettings::default());
-
-        builder = builder.import_old(&old_settings);
-
-        let local_source = Path::new(CONFIG_FOLDER).join(CONFIG_LOCAL);
-        let json_string = serde_json::to_string_pretty(&builder.tracker_settings).unwrap();
-
-        fs::write(local_source.with_extension("old.json"), json_string).unwrap()
-    }
-
-    #[test]
-    fn load_old_settings_into_default() {
-        let old_settings = Settings::default().unwrap();
-
-        let mut builder = TrackerSettingsBuilder::default();
-
-        builder = builder.import_old(&old_settings);
-
-        let local_source = Path::new(CONFIG_FOLDER).join(CONFIG_LOCAL);
-        let json_string = serde_json::to_string_pretty(&builder.tracker_settings).unwrap();
-
-        fs::write(local_source.with_extension("default.json"), json_string).unwrap()
-    }
 }

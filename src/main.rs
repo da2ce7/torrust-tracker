@@ -51,7 +51,7 @@ async fn main() {
     logging::setup_logging(&settings.global.as_ref().unwrap());
 
     // Run jobs
-    let jobs = setup::setup(&settings.service.unwrap(), tracker.clone()).await;
+    let jobs = setup::setup(&settings.services.unwrap(), tracker.clone()).await;
 
     // handle the signals here
     tokio::select! {

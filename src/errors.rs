@@ -6,7 +6,7 @@ use thiserror::Error;
 use warp::reject::Reject;
 
 use crate::databases::database::DatabaseDrivers;
-use crate::settings::{CommonSettings, DatabaseSettings, GlobalSettings, ServiceSetting, TlsSettings, TrackerSettings};
+use crate::settings::{CommonSettings, DatabaseSettings, GlobalSettings, ServiceSettingClean, TlsSettings, TrackerSettings};
 
 #[derive(Error, Debug)]
 pub enum ServerError {
@@ -51,17 +51,38 @@ impl Reject for ServerError {}
 
 #[derive(Error, Debug)]
 pub enum SettingsManagerError {
-    #[error("Unable to write out to: \".{path}\" : {source}")]
-    FailedToWriteOut { path: PathBuf, source: serde_json::Error },
-    #[error("Unable to read from: \".{path}\" : {source}")]
-    FailedToReadIn { path: PathBuf, source: serde_json::Error },
-    #[error("Unable to open file: \".{path}\" : {source}")]
-    FailedToOpenFile { path: PathBuf, source: io::Error },
     #[error("Unable find existing configuration: \".{source}\"")]
     NoExistingConfigFile { source: FilePathError },
+    #[error("File Exists!: \"{path}\"")]
+    ExistingFile { path: PathBuf },
+    #[error("Path is not a Directory!: \"{path}\"")]
+    NotDirectory { path: PathBuf },
+
+    #[error("Path is not a Directory at: \"{path}\" : {source}!")]
+    FailedToCreateConfigDirectory { path: PathBuf, source: io::Error },
+
+    #[error("Unable to open file: \"{path}\" : {source}")]
+    FailedToOpenFile { path: PathBuf, source: io::Error },
+    #[error("Unable to read in from: \"{path_from}\" : {source}")]
+    FailedToReadIn { path_from: PathBuf, source: serde_json::Error },
+    #[error("Unable to write out to: \"{path_to}\" : {source}")]
+    FailedToWriteOut { path_to: PathBuf, source: serde_json::Error },
+
+    #[error("Unable to read old settings from: \"{path_from}\" : {source}")]
+    FailedToReadOld { path_from: PathBuf, source: io::Error },
+    #[error("Unable to parse in old settings from: \"{path_from}\" : {source}")]
+    FailedToParseInOld { path_from: PathBuf, source: toml::de::Error },
+    #[error("Unable to import old settings from: \"{path_from}\" : \"{source}\"")]
+    FailedToImportOldSettings { path_from: PathBuf, source: Box<SettingsError> },
+    #[error("Unable to move successfully imported old settings from: {path_from} to: {path_to} \"{source}\"")]
+    FailedToMoveOldSettingsFile {
+        path_from: PathBuf,
+        path_to: PathBuf,
+        source: io::Error,
+    },
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum SettingsError {
     #[error("Bad Namespace: \".{field}\" {message}")]
     NamespaceError { message: String, field: String },
@@ -206,22 +227,22 @@ impl DatabaseSettingsError {
 #[derive(Error, Debug, Clone)]
 pub enum ServiceSettingsError {
     #[error("Required Field is missing (null)!")]
-    MissingRequiredField { field: String, data: ServiceSetting },
+    MissingRequiredField { field: String, data: ServiceSettingClean },
 
     #[error("Required Field is empty (0 or \"\")!")]
-    EmptyRequiredField { field: String, data: ServiceSetting },
+    EmptyRequiredField { field: String, data: ServiceSettingClean },
 
     #[error("Api Services Requires at least one Access Token!")]
-    ApiRequiresAccessToken { field: String, data: ServiceSetting },
+    ApiRequiresAccessToken { field: String, data: ServiceSettingClean },
 
     #[error("TLS Services Requires TLS Settings!")]
-    TlsRequiresTlsConfig { field: String, data: ServiceSetting },
+    TlsRequiresTlsConfig { field: String, data: ServiceSettingClean },
 
     #[error("Bad TLS Configuration: {source}.")]
     TlsSettingsError {
         field: String,
         source: TlsSettingsError,
-        data: ServiceSetting,
+        data: ServiceSettingClean,
     },
 
     #[error("Bad Socket String: \"{input}\".")]
@@ -229,7 +250,7 @@ pub enum ServiceSettingsError {
         field: String,
         input: String,
         source: AddrParseError,
-        data: ServiceSetting,
+        data: ServiceSettingClean,
     },
 }
 
