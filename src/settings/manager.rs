@@ -8,7 +8,7 @@ use log::{info, warn};
 
 use super::{
     CommonSettings, CommonSettingsBuilder, DatabaseSettings, DatabaseSettingsBuilder, GlobalSettings, GlobalSettingsBuilder,
-    Services, ServicesBuilder, Settings, TrackerSettings, TrackerSettingsBuilder,
+    ServicesBuilder, Settings, TrackerSettings, TrackerSettingsBuilder,
 };
 use crate::config_const::{CONFIG_DEFAULT, CONFIG_FOLDER, CONFIG_LOCAL, CONFIG_OLD};
 use crate::errors::helpers::get_existing_file_path;
@@ -41,7 +41,7 @@ impl SettingsManager {
             settings: Settings {
                 namespace: settings.namespace,
                 version: settings.version,
-                tracker: TrackerSettingsBuilder::empty().try_into().unwrap(),
+                tracker: TrackerSettingsBuilder::empty().tracker_settings,
             },
         }
     }
@@ -345,20 +345,22 @@ impl SettingsManager {
 
             let defaults: TrackerSettings = TrackerSettingsBuilder::default().try_into().unwrap();
 
-            if TryInto::<GlobalSettings>::try_into(GlobalSettingsBuilder::from(&builder.tracker_settings.global.unwrap()))
+            if TryInto::<GlobalSettings>::try_into(GlobalSettingsBuilder::from(builder.tracker_settings.global.as_ref().unwrap()))
                 .is_err()
             {
                 builder.tracker_settings.global = defaults.global;
             }
 
-            if TryInto::<CommonSettings>::try_into(CommonSettingsBuilder::from(&builder.tracker_settings.common.unwrap()))
+            if TryInto::<CommonSettings>::try_into(CommonSettingsBuilder::from(builder.tracker_settings.common.as_ref().unwrap()))
                 .is_err()
             {
                 builder.tracker_settings.common = defaults.common;
             }
 
-            if TryInto::<DatabaseSettings>::try_into(DatabaseSettingsBuilder::from(&builder.tracker_settings.database.unwrap()))
-                .is_err()
+            if TryInto::<DatabaseSettings>::try_into(DatabaseSettingsBuilder::from(
+                builder.tracker_settings.database.as_ref().unwrap(),
+            ))
+            .is_err()
             {
                 builder.tracker_settings.database = defaults.database;
             }
@@ -366,26 +368,6 @@ impl SettingsManager {
             let mut service_builder = ServicesBuilder::from(&builder.tracker_settings.services.unwrap());
             service_builder.remove_check_fail();
             builder.tracker_settings.services = Some(service_builder.try_into().unwrap());
-        }
-
-        if import_try
-            .to_owned()
-            .tracker_settings
-            .common
-            .filter(|common| TryInto::<CommonSettings>::try_into(CommonSettingsBuilder::from(common)).is_ok())
-            .is_none()
-        {
-            builder = builder.with_common(&CommonSettingsBuilder::default().try_into().unwrap());
-        }
-
-        if import_try
-            .to_owned()
-            .tracker_settings
-            .database
-            .filter(|database| TryInto::<DatabaseSettings>::try_into(DatabaseSettingsBuilder::from(database)).is_ok())
-            .is_none()
-        {
-            builder = builder.with_common(&CommonSettingsBuilder::default().try_into().unwrap());
         }
 
         let imported = match TryInto::<TrackerSettings>::try_into(builder) {

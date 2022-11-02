@@ -65,7 +65,7 @@ pub struct Settings {
     pub http_api: Option<HttpApiConfig>,
 }
 
-#[cfg(none)]
+#[cfg(not)]
 mod tests {
 
     use std::path::Path;
