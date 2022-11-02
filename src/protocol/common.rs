@@ -26,16 +26,8 @@ pub enum AnnounceEventDef {
 #[serde(remote = "NumberOfBytes")]
 pub struct NumberOfBytesDef(pub i64);
 
-#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug, Ord)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub struct InfoHash(pub [u8; 20]);
-
-impl InfoHash {
-    pub fn to_string(&self) -> String {
-        let mut buffer = [0u8; 40];
-        let bytes_out = binascii::bin2hex(&self.0, &mut buffer).ok().unwrap();
-        String::from(std::str::from_utf8(bytes_out).unwrap())
-    }
-}
 
 impl std::fmt::Display for InfoHash {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -61,6 +53,12 @@ impl std::str::FromStr for InfoHash {
 impl std::cmp::PartialOrd<InfoHash> for InfoHash {
     fn partial_cmp(&self, other: &InfoHash) -> Option<std::cmp::Ordering> {
         self.0.partial_cmp(&other.0)
+    }
+}
+
+impl Ord for InfoHash {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.cmp(&other.0)
     }
 }
 

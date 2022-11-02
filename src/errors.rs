@@ -1,3 +1,4 @@
+use std::io;
 use std::net::AddrParseError;
 use std::path::PathBuf;
 
@@ -47,6 +48,18 @@ pub enum ServerError {
 }
 
 impl Reject for ServerError {}
+
+#[derive(Error, Debug)]
+pub enum SettingsManagerError {
+    #[error("Unable to write out to: \".{path}\" : {source}")]
+    FailedToWriteOut { path: PathBuf, source: serde_json::Error },
+    #[error("Unable to read from: \".{path}\" : {source}")]
+    FailedToReadIn { path: PathBuf, source: serde_json::Error },
+    #[error("Unable to open file: \".{path}\" : {source}")]
+    FailedToOpenFile { path: PathBuf, source: io::Error },
+    #[error("Unable find existing configuration: \".{source}\"")]
+    NoExistingConfigFile { source: FilePathError },
+}
 
 #[derive(Error, Debug)]
 pub enum SettingsError {
