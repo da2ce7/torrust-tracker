@@ -8,8 +8,13 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 use crate::config_const::{CONFIG_DEFAULT, CONFIG_FOLDER, CONFIG_LOCAL, CONFIG_OLD_LOCAL, CONFIG_OVERRIDE};
-use crate::databases::database::DatabaseDrivers;
 use crate::tracker::mode::TrackerMode;
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Copy, Clone, Hash)]
+pub enum DatabaseDriversOld {
+    Sqlite3,
+    MySQL,
+}
 
 #[serde_as]
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
@@ -42,7 +47,7 @@ pub struct HttpApiConfig {
 pub struct Settings {
     pub log_level: Option<String>,
     pub mode: Option<TrackerMode>,
-    pub db_driver: Option<DatabaseDrivers>,
+    pub db_driver: Option<DatabaseDriversOld>,
     pub db_path: Option<String>,
     pub announce_interval: Option<u32>,
     pub min_announce_interval: Option<u32>,

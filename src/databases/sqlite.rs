@@ -6,6 +6,7 @@ use log::debug;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 
+use super::database::DatabaseDrivers::Sqlite3;
 use crate::databases::database;
 use crate::databases::database::{Database, Error};
 use crate::errors::DatabaseSettingsError;
@@ -22,8 +23,18 @@ pub struct Sqlite3DatabaseSettings {
 impl TryFrom<&DatabaseSettings> for Sqlite3DatabaseSettings {
     type Error = DatabaseSettingsError;
 
-    fn try_from(_value: &DatabaseSettings) -> Result<Self, Self::Error> {
-        todo!()
+    fn try_from(setting: &DatabaseSettings) -> Result<Self, Self::Error> {
+        match setting.get_driver().unwrap() {
+            Sqlite3 => Ok(Sqlite3DatabaseSettings {
+                database_file_path: setting.get_slq_lite_3_file_path()?,
+            }),
+            driver => Err(DatabaseSettingsError::WrongDriver {
+                field: "driver".to_string(),
+                expected: Sqlite3,
+                actual: driver,
+                data: setting.to_owned(),
+            }),
+        }
     }
 }
 

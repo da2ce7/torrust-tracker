@@ -1,7 +1,7 @@
 {
   "global": {
     "tracker_mode": "listed",
-    "log_filter_level": "Info",
+    "log_filter_level": "info",
     "external_ip": null,
     "on_reverse_proxy": false
   },
@@ -15,7 +15,7 @@
     "enable_peerless_torrent_pruning": false
   },
   "database": {
-    "driver": "Sqlite3",
+    "driver": "sqlite3",
     "sql_lite_3_db_file_path": "data.db",
     "my_sql_connection_url": null
   },
@@ -23,7 +23,7 @@
     "default_api": {
       "enabled": false,
       "display_name": "HTTP API (default)",
-      "service": "API",
+      "service": "api",
       "socket": "127.0.0.1:1212",
       "tls": null,
       "access_tokens": {
@@ -33,7 +33,7 @@
     "default_http": {
       "enabled": false,
       "display_name": "HTTP (default)",
-      "service": "HTTP",
+      "service": "http",
       "socket": "0.0.0.0:6969",
       "tls": null,
       "access_tokens": null
@@ -41,7 +41,7 @@
     "default_tls": {
       "enabled": false,
       "display_name": "TLS (default)",
-      "service": "HTTP",
+      "service": "http",
       "socket": "0.0.0.0:6969",
       "tls": {
         "certificate_file_path": "",
@@ -52,7 +52,7 @@
     "default_udp": {
       "enabled": false,
       "display_name": "UDP (default)",
-      "service": "UDP",
+      "service": "udp",
       "socket": "0.0.0.0:6969",
       "tls": null,
       "access_tokens": null

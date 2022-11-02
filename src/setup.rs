@@ -33,11 +33,11 @@ pub async fn setup(services: &Services, tracker: Arc<TorrentTracker>) -> Vec<Joi
     let mut api_services: HashSet<ApiServiceSettings> = HashSet::new();
 
     for service in services
-        .into_iter()
+        .iter()
         .filter(|service| service.1.enabled.filter(|t| t.to_owned()).is_some())
     {
         match service.1.service.unwrap() {
-            ServiceProtocol::UDP => {
+            ServiceProtocol::Udp => {
                 // Todo: Handel Error.
                 let service: UdpServiceSettings = service.try_into().unwrap();
 
@@ -46,7 +46,7 @@ pub async fn setup(services: &Services, tracker: Arc<TorrentTracker>) -> Vec<Joi
 
                 udp_services.insert(service);
             }
-            ServiceProtocol::HTTP => {
+            ServiceProtocol::Http => {
                 // Todo: Handel Error.
                 let service: HttpServiceSettings = service.try_into().unwrap();
 
@@ -55,7 +55,7 @@ pub async fn setup(services: &Services, tracker: Arc<TorrentTracker>) -> Vec<Joi
 
                 http_services.insert(service);
             }
-            ServiceProtocol::TLS => {
+            ServiceProtocol::Tls => {
                 // Todo: Handel Error.
                 let service: TlsServiceSettings = service.try_into().unwrap();
 
@@ -64,7 +64,7 @@ pub async fn setup(services: &Services, tracker: Arc<TorrentTracker>) -> Vec<Joi
 
                 tls_services.insert(service);
             }
-            ServiceProtocol::API => {
+            ServiceProtocol::Api => {
                 // Todo: Handel Error.
                 let service: ApiServiceSettings = service.try_into().unwrap();
 

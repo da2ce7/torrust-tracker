@@ -8,7 +8,8 @@ use crate::protocol::common::InfoHash;
 use crate::settings::DatabaseSettings;
 use crate::tracker::key::AuthKey;
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Copy, Clone, Hash)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Copy, Clone, Hash, Display)]
+#[serde(rename_all = "snake_case")]
 pub enum DatabaseDrivers {
     Sqlite3,
     MySQL,

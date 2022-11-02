@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use thiserror::Error;
 use warp::reject::Reject;
 
+use crate::databases::database::DatabaseDrivers;
 use crate::settings::{CommonSettings, DatabaseSettings, GlobalSettings, ServiceSetting, TlsSettings, TrackerSettings};
 
 #[derive(Error, Debug)]
@@ -163,6 +164,14 @@ pub enum DatabaseSettingsError {
 
     #[error("Required Field is empty (0 or \"\")!")]
     EmptyRequiredField { field: String, data: DatabaseSettings },
+
+    #[error("Want {expected}, but have {actual}!")]
+    WrongDriver {
+        field: String,
+        expected: DatabaseDrivers,
+        actual: DatabaseDrivers,
+        data: DatabaseSettings,
+    },
 }
 
 impl DatabaseSettingsError {
@@ -170,6 +179,12 @@ impl DatabaseSettingsError {
         match self {
             Self::MissingRequiredField { field, data: _ } => field,
             Self::EmptyRequiredField { field, data: _ } => field,
+            Self::WrongDriver {
+                field,
+                expected: _,
+                actual: _,
+                data: _,
+            } => field,
         }
         .to_owned()
     }

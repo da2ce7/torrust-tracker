@@ -19,6 +19,7 @@ mod udp_tracker_server {
     use tokio::task::JoinHandle;
     use torrust_tracker::jobs::udp_tracker;
     use torrust_tracker::tracker::helpers::TrackerArgs;
+    use torrust_tracker::tracker::mode::TrackerMode;
     use torrust_tracker::tracker::tracker::TorrentTracker;
     use torrust_tracker::udp::{UdpServiceSettings, MAX_PACKET_SIZE};
     use torrust_tracker::{logging, static_time};
@@ -31,7 +32,7 @@ mod udp_tracker_server {
     impl Default for UdpTestSettings {
         fn default() -> Self {
             Self {
-                tracker: TrackerArgs::no_logs(),
+                tracker: TrackerArgs::new().no_logs().mode(TrackerMode::Public),
                 service: UdpServiceSettings {
                     id: "test".to_string(),
                     display_name: "UDP Test Service".to_string(),
@@ -298,6 +299,8 @@ mod udp_tracker_server {
         client.send(announce_request.into()).await;
 
         let response = client.receive().await;
+
+        eprintln!("{:?}", response);
 
         assert!(is_ipv4_announce_response(&response));
     }

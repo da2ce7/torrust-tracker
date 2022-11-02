@@ -35,46 +35,49 @@ pub mod helpers {
     }
 
     impl TrackerArgs {
-        pub fn mode(tracker_mode: TrackerMode) -> Self {
-            let args = TrackerArgs::default();
+        pub fn new() -> Self {
+            Self::default()
+        }
 
+        pub fn mode(self, tracker_mode: TrackerMode) -> Self {
             TrackerArgs {
-                global: Arc::new(GlobalSettingsBuilder::default().with_mode(tracker_mode).try_into().unwrap()),
-                common: args.common,
-                stats_tracker: args.stats_tracker,
-                database: args.database,
+                global: Arc::new(
+                    GlobalSettingsBuilder::from(&*self.global)
+                        .with_mode(tracker_mode)
+                        .try_into()
+                        .unwrap(),
+                ),
+                common: self.common,
+                stats_tracker: self.stats_tracker,
+                database: self.database,
             }
         }
 
-        pub fn external_ip(external_ip: &IpAddr) -> Self {
-            let args = TrackerArgs::default();
-
+        pub fn external_ip(self, external_ip: &IpAddr) -> Self {
             TrackerArgs {
                 global: Arc::new(
-                    GlobalSettingsBuilder::default()
+                    GlobalSettingsBuilder::from(&*self.global)
                         .with_external_ip(external_ip)
                         .try_into()
                         .unwrap(),
                 ),
-                common: args.common,
-                stats_tracker: args.stats_tracker,
-                database: args.database,
+                common: self.common,
+                stats_tracker: self.stats_tracker,
+                database: self.database,
             }
         }
 
-        pub fn no_logs() -> Self {
-            let args = TrackerArgs::default();
-
+        pub fn no_logs(self) -> Self {
             TrackerArgs {
                 global: Arc::new(
-                    GlobalSettingsBuilder::default()
+                    GlobalSettingsBuilder::from(&*self.global)
                         .with_log_filter(&LogFilterLevel::Off)
                         .try_into()
                         .unwrap(),
                 ),
-                common: args.common,
-                stats_tracker: args.stats_tracker,
-                database: args.database,
+                common: self.common,
+                stats_tracker: self.stats_tracker,
+                database: self.database,
             }
         }
     }

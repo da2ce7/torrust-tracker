@@ -5,8 +5,10 @@ use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
+use derive_more::Display;
 use serde::{Deserialize, Serialize};
 
+use self::old_settings::DatabaseDriversOld;
 use crate::databases::database::DatabaseDrivers;
 use crate::errors::helpers::get_existing_file_path;
 use crate::errors::{
@@ -236,16 +238,19 @@ impl TrackerSettingsBuilder {
         if let Some(driver) = old_settings.db_driver {
             self.tracker_settings.database = Some(DatabaseSettingsBuilder::empty().database_settings);
 
-            self.tracker_settings.database.as_mut().unwrap().driver = Some(driver);
+            self.tracker_settings.database.as_mut().unwrap().driver = Some(match driver {
+                DatabaseDriversOld::Sqlite3 => DatabaseDrivers::Sqlite3,
+                DatabaseDriversOld::MySQL => DatabaseDrivers::MySQL,
+            });
 
             if let Some(val) = old_settings.db_path.as_ref() {
                 match driver {
-                    DatabaseDrivers::Sqlite3 => {
+                    DatabaseDriversOld::Sqlite3 => {
                         if let Ok(path) = PathBuf::from_str(val) {
                             self.tracker_settings.database.as_mut().unwrap().sql_lite_3_db_file_path = Some(path);
                         }
                     }
-                    DatabaseDrivers::MySQL => {
+                    DatabaseDriversOld::MySQL => {
                         self.tracker_settings.database.as_mut().unwrap().my_sql_connection_url = Some(val.to_owned())
                     }
                 }
@@ -600,7 +605,7 @@ impl ServiceSetting {
             display_name: String);
 
         match self.service.unwrap() {
-            ServiceProtocol::API => {
+            ServiceProtocol::Api => {
                 if self.access_tokens.as_ref().filter(|f| !f.is_empty()).is_none() {
                     return Err(ServiceSettingsError::ApiRequiresAccessToken {
                         field: "access_tokens".to_string(),
@@ -608,7 +613,7 @@ impl ServiceSetting {
                     });
                 };
             }
-            ServiceProtocol::TLS => match &self.tls {
+            ServiceProtocol::Tls => match &self.tls {
                 Some(tls) => {
                     if let Err(source) = tls.check() {
                         return Err(ServiceSettingsError::TlsSettingsError {
@@ -683,7 +688,7 @@ impl ServicesBuilder {
         let api = ServiceSetting {
             enabled: Some(false),
             display_name: Some("HTTP API (default)".to_string()),
-            service: Some(ServiceProtocol::API),
+            service: Some(ServiceProtocol::Api),
             socket: Some(SocketAddr::from_str("127.0.0.1:1212").unwrap()),
             tls: None,
             access_tokens: Some(access_tokens),
@@ -692,7 +697,7 @@ impl ServicesBuilder {
         let udp = ServiceSetting {
             enabled: Some(false),
             display_name: Some("UDP (default)".to_string()),
-            service: Some(ServiceProtocol::UDP),
+            service: Some(ServiceProtocol::Udp),
             socket: Some(SocketAddr::from_str("0.0.0.0:6969").unwrap()),
             tls: None,
             access_tokens: None,
@@ -701,7 +706,7 @@ impl ServicesBuilder {
         let http = ServiceSetting {
             enabled: Some(false),
             display_name: Some("HTTP (default)".to_string()),
-            service: Some(ServiceProtocol::HTTP),
+            service: Some(ServiceProtocol::Http),
             socket: Some(SocketAddr::from_str("0.0.0.0:6969").unwrap()),
             tls: None,
             access_tokens: None,
@@ -710,7 +715,7 @@ impl ServicesBuilder {
         let tls = ServiceSetting {
             enabled: Some(false),
             display_name: Some("TLS (default)".to_string()),
-            service: Some(ServiceProtocol::HTTP),
+            service: Some(ServiceProtocol::Http),
             socket: Some(SocketAddr::from_str("0.0.0.0:6969").unwrap()),
             tls: Some(TlsSettings {
                 certificate_file_path: Some(PathBuf::default()),
@@ -740,7 +745,7 @@ impl ServicesBuilder {
                 ServiceSetting {
                     enabled: api.enabled,
                     display_name: Some("HTTP API (imported)".to_string()),
-                    service: Some(ServiceProtocol::API),
+                    service: Some(ServiceProtocol::Api),
                     socket: api
                         .bind_address
                         .as_ref()
@@ -759,7 +764,7 @@ impl ServicesBuilder {
                     ServiceSetting {
                         enabled: service.enabled,
                         display_name: Some("UDP Service (imported)".to_string()),
-                        service: Some(ServiceProtocol::UDP),
+                        service: Some(ServiceProtocol::Udp),
                         socket: service
                             .bind_address
                             .as_ref()
@@ -780,7 +785,7 @@ impl ServicesBuilder {
                         ServiceSetting {
                             enabled: service.enabled,
                             display_name: Some("HTTP Service(imported)".to_string()),
-                            service: Some(ServiceProtocol::HTTP),
+                            service: Some(ServiceProtocol::Http),
                             socket: service
                                 .bind_address
                                 .as_ref()
@@ -796,7 +801,7 @@ impl ServicesBuilder {
                         ServiceSetting {
                             enabled: service.enabled,
                             display_name: Some("TLS Service (imported)".to_string()),
-                            service: Some(ServiceProtocol::TLS),
+                            service: Some(ServiceProtocol::Tls),
                             socket: service
                                 .bind_address
                                 .as_ref()
@@ -887,6 +892,7 @@ impl TlsSettings {
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Copy, Clone, Hash)]
+#[serde(rename_all = "snake_case")]
 pub enum LogFilterLevel {
     Off,
     Error,
@@ -896,12 +902,19 @@ pub enum LogFilterLevel {
     Trace,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Copy, Clone, Hash)]
+impl std::fmt::Display for LogFilterLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", format!("{:?}", *self).to_lowercase())
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Copy, Clone, Hash, Display)]
+#[serde(rename_all = "snake_case")]
 pub enum ServiceProtocol {
-    UDP,
-    HTTP,
-    TLS,
-    API,
+    Udp,
+    Http,
+    Tls,
+    Api,
 }
 
 #[cfg(test)]

@@ -266,17 +266,17 @@ mod tests {
     use crate::tracker::tracker::TorrentTracker;
 
     fn initialized_public_tracker() -> Arc<TorrentTracker> {
-        let args = TrackerArgs::mode(TrackerMode::Public);
+        let args = TrackerArgs::new().mode(TrackerMode::Public);
         Arc::new(TorrentTracker::new(&args.global, &args.common, (args.stats_tracker)(), (args.database)()).unwrap())
     }
 
     fn initialized_private_tracker() -> Arc<TorrentTracker> {
-        let args = TrackerArgs::mode(TrackerMode::Private);
+        let args = TrackerArgs::new().mode(TrackerMode::Private);
         Arc::new(TorrentTracker::new(&args.global, &args.common, (args.stats_tracker)(), (args.database)()).unwrap())
     }
 
     fn initialized_whitelisted_tracker() -> Arc<TorrentTracker> {
-        let args = TrackerArgs::mode(TrackerMode::Listed);
+        let args = TrackerArgs::new().mode(TrackerMode::Listed);
         Arc::new(TorrentTracker::new(&args.global, &args.common, (args.stats_tracker)(), (args.database)()).unwrap())
     }
 
@@ -542,6 +542,7 @@ mod tests {
             };
 
             use crate::protocol::common::PeerId;
+            use crate::tracker::mode::TrackerMode;
             use crate::tracker::statistics::TrackerStatisticsEvent;
             use crate::tracker::tracker::TorrentTracker;
             use crate::udp::connection_cookie::{into_connection_id, make_connection_cookie};
@@ -690,7 +691,7 @@ mod tests {
 
                 tracker_stats_service.should_throw_event(TrackerStatisticsEvent::Udp4Announce);
 
-                let args = TrackerArgs::default();
+                let args = TrackerArgs::new().mode(TrackerMode::Public);
 
                 let tracker =
                     Arc::new(TorrentTracker::new(&args.global, &args.common, tracker_stats_service, (args.database)()).unwrap());
@@ -705,18 +706,28 @@ mod tests {
 
             mod from_a_loopback_ip {
                 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+                use std::str::FromStr;
+                use std::sync::Arc;
 
                 use aquatic_udp_protocol::{InfoHash as AquaticInfoHash, PeerId as AquaticPeerId};
 
                 use crate::protocol::common::PeerId;
+                use crate::tracker::helpers::TrackerArgs;
+                use crate::tracker::mode::TrackerMode;
+                use crate::tracker::tracker::TorrentTracker;
                 use crate::udp::connection_cookie::{into_connection_id, make_connection_cookie};
                 use crate::udp::handle_announce;
                 use crate::udp::handlers::tests::announce_request::AnnounceRequestBuilder;
-                use crate::udp::handlers::tests::{initialized_public_tracker, TorrentPeerBuilder};
+                use crate::udp::handlers::tests::TorrentPeerBuilder;
 
                 #[tokio::test]
                 async fn the_peer_ip_should_be_changed_to_the_external_ip_in_the_tracker_configuration_if_defined() {
-                    let tracker = initialized_public_tracker();
+                    let args = TrackerArgs::new()
+                        .mode(TrackerMode::Public)
+                        .external_ip(&IpAddr::from_str("0.0.0.0").unwrap());
+                    let tracker = Arc::new(
+                        TorrentTracker::new(&args.global, &args.common, (args.stats_tracker)(), (args.database)()).unwrap(),
+                    );
 
                     let client_ip = Ipv4Addr::new(127, 0, 0, 1);
                     let client_port = 8080;
@@ -760,6 +771,7 @@ mod tests {
             };
 
             use crate::protocol::common::PeerId;
+            use crate::tracker::mode::TrackerMode;
             use crate::tracker::statistics::TrackerStatisticsEvent;
             use crate::tracker::tracker::TorrentTracker;
             use crate::udp::connection_cookie::{into_connection_id, make_connection_cookie};
@@ -915,7 +927,7 @@ mod tests {
 
                 tracker_stats_service.should_throw_event(TrackerStatisticsEvent::Udp6Announce);
 
-                let args = TrackerArgs::default();
+                let args = TrackerArgs::new().mode(TrackerMode::Public);
 
                 let tracker =
                     Arc::new(TorrentTracker::new(&args.global, &args.common, tracker_stats_service, (args.database)()).unwrap());
@@ -936,6 +948,7 @@ mod tests {
 
                 use aquatic_udp_protocol::{InfoHash as AquaticInfoHash, PeerId as AquaticPeerId};
 
+                use crate::tracker::mode::TrackerMode;
                 use crate::tracker::tracker::TorrentTracker;
                 use crate::udp::connection_cookie::{into_connection_id, make_connection_cookie};
                 use crate::udp::handle_announce;
@@ -944,7 +957,9 @@ mod tests {
 
                 #[tokio::test]
                 async fn the_peer_ip_should_be_changed_to_the_external_ip_in_the_tracker_configuration() {
-                    let args = TrackerArgs::external_ip(&IpAddr::from_str("::126.0.0.1").unwrap());
+                    let args = TrackerArgs::new()
+                        .mode(TrackerMode::Public)
+                        .external_ip(&IpAddr::from_str("::126.0.0.1").unwrap());
                     let tracker = Arc::new(
                         TorrentTracker::new(&args.global, &args.common, (args.stats_tracker)(), (args.database)()).unwrap(),
                     );
