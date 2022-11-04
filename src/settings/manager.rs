@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use log::{info, warn};
 
-use super::{Settings, SettingsErrored, TrackerSettings, TrackerSettingsBuilder};
+use super::{Settings, SettingsErrored, TrackerSettings, TrackerSettingsBuilder, SETTINGS_NAMESPACE, SETTINGS_NAMESPACE_ERRORED};
 use crate::config_const::{CONFIG_BACKUP_FOLDER, CONFIG_DEFAULT, CONFIG_ERROR_FOLDER, CONFIG_FOLDER, CONFIG_LOCAL, CONFIG_OLD};
 use crate::errors::helpers::get_file_at;
 use crate::errors::SettingsManagerError;
@@ -24,6 +24,18 @@ impl Default for SettingsManager {
         Self {
             settings: Ok(Default::default()),
         }
+    }
+}
+
+impl From<Settings> for SettingsManager {
+    fn from(okay: Settings) -> Self {
+        Self { settings: Ok(okay) }
+    }
+}
+
+impl From<SettingsErrored> for SettingsManager {
+    fn from(error: SettingsErrored) -> Self {
+        Self { settings: Err(error) }
     }
 }
 
@@ -66,13 +78,13 @@ impl SettingsManager {
         // If no old settings, lets try the local settings.
         let local_settings = match Self::read(local) {
             Ok(settings) => Some(settings),
-            Err(error) => match error {
+            Err(err) => match err {
                 SettingsManagerError::NoExistingConfigFile { source } => {
                     info!("No Configuration To Load: {source}");
                     None
                 }
-                error => {
-                    return Err(error);
+                err => {
+                    return Err(err);
                 }
             },
         };
@@ -112,16 +124,6 @@ impl SettingsManager {
         Self::default().write(dest.0, &dest.1)
     }
 
-    pub fn read_json<R>(rdr: R) -> Result<Self, serde_json::Error>
-    where
-        R: io::Read,
-    {
-        match serde_json::from_reader(rdr) {
-            Ok(settings) => Ok(Self { settings }),
-            Err(error) => Err(error),
-        }
-    }
-
     pub fn read(from: &PathBuf) -> Result<Self, SettingsManagerError> {
         let source = get_file_at(from, OpenOptions::new().read(true))
             .map_err(|error| SettingsManagerError::NoExistingConfigFile { source: error })?;
@@ -132,22 +134,46 @@ impl SettingsManager {
         })
     }
 
-    pub fn write_json<W>(&self, writer: W) -> Result<(), serde_json::Error>
-    where
-        W: io::Write,
-    {
-        match &self.settings {
-            Ok(okay) => serde_json::to_writer_pretty(writer, okay),
-            Err(error) => serde_json::to_writer_pretty(writer, error),
-        }
-    }
-
     pub fn write(&self, writer: impl io::Write, to: &PathBuf) -> Result<(), SettingsManagerError> {
         self.write_json(writer)
             .map_err(|error| SettingsManagerError::FailedToWriteOut {
                 to: to.to_owned(),
                 message: error.to_string(),
             })
+    }
+
+    pub fn read_json<R>(rdr: R) -> Result<Self, SettingsManagerError>
+    where
+        R: io::Read,
+    {
+        match serde_json::from_reader::<R, Settings>(*rdr.by_ref()) {
+            Ok(settings) => match settings.namespace.as_str() {
+                SETTINGS_NAMESPACE => {
+                    return Ok(settings.into());
+                }
+                SETTINGS_NAMESPACE_ERRORED => serde_json::from_reader::<R, SettingsErrored>(rdr)
+                    .map_err(|error| SettingsManagerError::FailedToReadBuffer {
+                        message: error.to_string(),
+                    })
+                    .map(|op| SettingsManager::from(op)),
+                namespace => panic!("Unknown Namespace:{namespace}"),
+            },
+            Err(err) => match err {
+                err => {
+                    panic!("{err:?}");
+                }
+            },
+        }
+    }
+
+    pub fn write_json<W>(&self, writer: W) -> Result<(), serde_json::Error>
+    where
+        W: io::Write,
+    {
+        match &self.settings {
+            Ok(okay) => serde_json::to_writer_pretty(writer, okay),
+            Err(err) => serde_json::to_writer_pretty(writer, err),
+        }
     }
 
     fn backup(&self, to: &Path, folder: PathBuf) -> Result<(), SettingsManagerError> {
@@ -412,10 +438,15 @@ impl SettingsManager {
 #[cfg(test)]
 mod tests {
     use std::env;
+    use std::fs::OpenOptions;
+    use std::io::{Read, Seek, Write};
 
+    use thiserror::Error;
     use uuid::Uuid;
 
     use super::SettingsManager;
+    use crate::errors::helpers::get_file_at;
+    use crate::settings::{Settings, SettingsErrored, TrackerSettings};
 
     #[test]
     fn it_should_write_the_default() {
@@ -442,5 +473,41 @@ mod tests {
     #[test]
     fn it_should_write_and_read_and_write_default_config() {
         SettingsManager::setup().unwrap();
+    }
+
+    #[test]
+    fn it_should_write_and_read_errored_settings() {
+        let path = env::temp_dir().as_path().join(format!("test_errored.{}", Uuid::new_v4()));
+        let mut file_rw = get_file_at(&path, OpenOptions::new().write(true).read(true).create_new(true)).unwrap();
+
+        #[derive(Error, Debug)]
+        enum TestErrors {
+            #[error("Test Error!")]
+            Error,
+        }
+
+        let errored: SettingsManager = SettingsErrored::new(&TrackerSettings::default(), &TestErrors::Error).into();
+
+        errored.write_json(std::io::Write::by_ref(&mut file_rw.0)).unwrap();
+        file_rw.0.rewind().unwrap();
+
+        let error_returned = SettingsManager::read_json(file_rw.0).unwrap();
+
+        assert_eq!(errored, error_returned)
+    }
+
+    #[test]
+    fn it_should_write_and_read_settings() {
+        let path = env::temp_dir().as_path().join(format!("test_errored.{}", Uuid::new_v4()));
+        let mut file_rw = get_file_at(&path, OpenOptions::new().write(true).read(true).create_new(true)).unwrap();
+
+        let settings: SettingsManager = Settings::default().into();
+
+        settings.write_json(std::io::Write::by_ref(&mut file_rw.0)).unwrap();
+        file_rw.0.rewind().unwrap();
+
+        let settings_returned = SettingsManager::read_json(file_rw.0).unwrap();
+
+        assert_eq!(settings, settings_returned)
     }
 }

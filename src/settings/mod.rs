@@ -95,6 +95,7 @@ trait Fix {
 }
 
 const SETTINGS_NAMESPACE: &str = "org.torrust.tracker.config";
+const SETTINGS_NAMESPACE_ERRORED: &str = "org.torrust.tracker.config.errored";
 const SETTINGS_VERSION: &str = "1.0.0";
 
 #[derive(Serialize, Deserialize, PartialEq, PartialOrd, Ord, Eq, Debug, Clone, Hash)]
@@ -108,7 +109,7 @@ pub struct SettingsErrored {
 impl SettingsErrored {
     pub fn new(tracker: &TrackerSettings, error: &impl std::error::Error) -> Self {
         Self {
-            namespace: format!("{}.{}", SETTINGS_NAMESPACE, "errored"),
+            namespace: SETTINGS_NAMESPACE_ERRORED.to_string(),
             version: SETTINGS_VERSION.to_string(),
             error: error.to_string(),
             tracker: tracker.to_owned(),
