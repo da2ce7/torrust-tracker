@@ -297,7 +297,7 @@ impl TryInto<TrackerSettings> for TrackerSettingsBuilder {
     fn try_into(self) -> Result<TrackerSettings, Self::Error> {
         if let Err(source) = self.tracker_settings.check() {
             return Err(SettingsError::TrackerSettingsError {
-                message: "".to_string(),
+                message: source.to_string(),
                 field: source.get_field(),
                 source,
             });
@@ -513,7 +513,7 @@ impl TryInto<GlobalSettings> for GlobalSettingsBuilder {
         match self.global_settings.check() {
             Ok(_) => Ok(self.global_settings),
             Err(source) => Err(SettingsError::GlobalSettingsError {
-                message: "".to_string(),
+                message: source.to_string(),
                 field: source.get_field(),
                 source,
             }),

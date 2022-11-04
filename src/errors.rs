@@ -62,6 +62,14 @@ pub enum SettingsManagerError {
         kind: io::ErrorKind,
         message: String,
     },
+
+    #[error("Path is not a Directory at: \"{at}\" : {kind}: {message}!")]
+    FailedToResolveDirectory {
+        at: PathBuf,
+        kind: io::ErrorKind,
+        message: String,
+    },
+
     #[error("Unable to create new file at: \"{at}\" : {source}!")]
     FailedToCreateNewFile { at: PathBuf, source: FilePathError },
     #[error("Unable to open file: \"{at}\" : {kind}: {message}.")]
@@ -141,7 +149,7 @@ pub enum SettingsError {
         source: DatabaseSettingsError,
     },
 
-    #[error("Service Settings Error: \".tracker.service.{id}.{field}\":{message}")]
+    #[error("Service Settings Error: \".tracker.service.{id}.{field}\": {message}")]
     ServiceSettingsError {
         message: String,
         field: String,

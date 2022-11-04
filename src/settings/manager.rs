@@ -91,11 +91,11 @@ impl SettingsManager {
 
         if let Some(existing) = existing {
             if let Some(archive_folder) = archive_folder {
-                Self::archive(existing.0, to, archive_folder)?
+                Self::archive(existing.0, &existing.1, archive_folder)?
             }
         }
 
-        let dest = get_file_at(to, OpenOptions::new().create(true).write(true)).map_err(|err| {
+        let dest = get_file_at(to, OpenOptions::new().write(true).create(true).truncate(true)).map_err(|err| {
             SettingsManagerError::FailedToCreateNewFile {
                 at: to.to_owned(),
                 source: err,
@@ -106,8 +106,8 @@ impl SettingsManager {
     }
 
     pub fn write_default(to: &PathBuf) -> Result<(), SettingsManagerError> {
-        let dest =
-            get_file_at(to, &OpenOptions::new()).map_err(|err| SettingsManagerError::NoExistingConfigFile { source: err })?;
+        let dest = get_file_at(to, OpenOptions::new().write(true).create(true).truncate(true))
+            .map_err(|err| SettingsManagerError::NoExistingConfigFile { source: err })?;
 
         Self::default().write(dest.0, &dest.1)
     }
@@ -123,7 +123,7 @@ impl SettingsManager {
     }
 
     pub fn read(from: &PathBuf) -> Result<Self, SettingsManagerError> {
-        let source = get_file_at(from, &OpenOptions::new())
+        let source = get_file_at(from, OpenOptions::new().read(true))
             .map_err(|error| SettingsManagerError::NoExistingConfigFile { source: error })?;
 
         Self::read_json(source.0).map_err(|error| SettingsManagerError::FailedToReadIn {
@@ -136,7 +136,10 @@ impl SettingsManager {
     where
         W: io::Write,
     {
-        serde_json::to_writer_pretty(writer, &self.settings)
+        match &self.settings {
+            Ok(okay) => serde_json::to_writer_pretty(writer, okay),
+            Err(error) => serde_json::to_writer_pretty(writer, error),
+        }
     }
 
     pub fn write(&self, writer: impl io::Write, to: &PathBuf) -> Result<(), SettingsManagerError> {
@@ -147,20 +150,36 @@ impl SettingsManager {
             })
     }
 
-    fn backup(&self, to: &PathBuf, folder: PathBuf) -> Result<(), SettingsManagerError> {
+    fn backup(&self, to: &Path, folder: PathBuf) -> Result<(), SettingsManagerError> {
+        let ext = match to.extension().map(|f| f.to_os_string()) {
+            Some(mut ext) => {
+                ext.push(".json");
+                ext
+            }
+            None => OsString::from("json"),
+        };
+
         let data: &mut Vec<u8> = &mut Default::default();
 
-        self.write_json(data.to_owned())
+        self.write_json(data.by_ref())
             .map_err(|error| SettingsManagerError::FailedToWriteBuffer {
                 message: error.to_string(),
             })?;
 
-        Self::archive(Cursor::new(data), &to, &folder)?;
+        Self::archive(Cursor::new(data), &to.with_extension(ext), &folder)?;
         Ok(())
     }
 
-    fn archive(mut rdr: impl io::Read, from: &PathBuf, to_folder: &PathBuf) -> Result<(), SettingsManagerError> {
+    fn archive(mut rdr: impl io::Read, from: &PathBuf, to_folder: &Path) -> Result<(), SettingsManagerError> {
         Self::make_folder(&to_folder.to_path_buf())?;
+
+        let to_folder = to_folder
+            .canonicalize()
+            .map_err(|err| SettingsManagerError::FailedToResolveDirectory {
+                at: to_folder.to_owned(),
+                kind: err.kind(),
+                message: err.to_string(),
+            })?;
 
         let mut hasher: DefaultHasher = Default::default();
         let data: &mut Vec<u8> = &mut Default::default();
@@ -176,19 +195,20 @@ impl SettingsManager {
 
         data.hash(&mut hasher);
 
-        let ext = match from.extension().map(|f| f.to_os_string()) {
-            Some(mut ext) => {
-                ext.push(format!(".{}", hasher.finish()));
-                ext
+        let ext = match from.extension() {
+            Some(ext) => {
+                let mut ostr = OsString::from(format!("{}.", hasher.finish()));
+                ostr.push(ext);
+                ostr
             }
             None => OsString::from(hasher.finish().to_string()),
         };
 
-        let to = to_folder.with_file_name(from.file_name().unwrap()).with_extension(ext);
+        let to = to_folder.join(from.file_name().unwrap()).with_extension(ext);
 
         // if we do not have a backup already, lets make one.
         if to.canonicalize().is_err() {
-            let mut dest = get_file_at(&to, OpenOptions::new().create_new(true).write(true)).map_err(|err| {
+            let mut dest = get_file_at(&to, OpenOptions::new().write(true).create_new(true)).map_err(|err| {
                 SettingsManagerError::FailedToCreateNewFile {
                     at: to.to_owned(),
                     source: err,
@@ -273,7 +293,7 @@ impl SettingsManager {
 
         // Attempt with Defaults
         if let test_builder = builder.to_owned().import_old(&parsed) {
-            if let Err(err) = TryInto::<TrackerSettings>::try_into(builder.to_owned()) {
+            if let Err(err) = TryInto::<TrackerSettings>::try_into(test_builder.to_owned()) {
                 Self::make_folder(&Path::new(CONFIG_ERROR_FOLDER).to_path_buf())?;
                 Self::make_folder(&error_folder)?;
                 let test = "Second";
@@ -338,16 +358,17 @@ impl SettingsManager {
             }
         };
 
-        let ext = match file.1.extension().map(|f| f.to_os_string()) {
-            Some(mut ext) => {
-                ext.push(format!(".{}", "old"));
-                ext
+        let ext = match file.1.extension() {
+            Some(ext) => {
+                let mut ostr = OsString::from("old.");
+                ostr.push(ext);
+                ostr
             }
             None => OsString::from("old"),
         };
 
         let backup = Path::new(CONFIG_BACKUP_FOLDER)
-            .with_file_name(file.1.file_name().unwrap())
+            .join(file.1.file_name().unwrap())
             .with_extension(ext);
 
         // if import was success, lets rename the extension to ".toml.old".

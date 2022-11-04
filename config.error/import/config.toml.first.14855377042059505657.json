@@ -1,6 +1,7 @@
 {
-  "namespace": "org.torrust.tracker",
-  "version": "Common Settings Error: \".tracker.common.announce_interval_seconds_minimum\": Required Field is missing (null)!",
+  "namespace": "org.torrust.tracker.config.errored",
+  "version": "1.0.0",
+  "error": "Common Settings Error: \".tracker.common.announce_interval_seconds_minimum\": Required Field is missing (null)! : Required Field is missing (null)!",
   "tracker": {
     "global": {
       "tracker_mode": "public",
@@ -29,20 +30,17 @@
         "service": "api",
         "socket": "127.0.0.1:1212",
         "tls": null,
-        "access_tokens": {
+        "api_tokens": {
           "admin": "MyAccessToken"
         }
       },
-      "tls_imported_0": {
+      "http_imported_0": {
         "enabled": true,
-        "display_name": "TLS Service (imported)",
-        "service": "tls",
+        "display_name": "HTTP Service(imported)",
+        "service": "http",
         "socket": "0.0.0.0:6969",
-        "tls": {
-          "certificate_file_path": "",
-          "key_file_path": ""
-        },
-        "access_tokens": null
+        "tls": null,
+        "api_tokens": null
       },
       "udp_imported_0": {
         "enabled": true,
@@ -50,7 +48,7 @@
         "service": "udp",
         "socket": "0.0.0.0:6969",
         "tls": null,
-        "access_tokens": null
+        "api_tokens": null
       }
     }
   }
