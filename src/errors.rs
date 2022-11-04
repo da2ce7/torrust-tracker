@@ -1,14 +1,15 @@
 use std::io;
-use std::net::AddrParseError;
 use std::path::PathBuf;
 
 use thiserror::Error;
 use warp::reject::Reject;
 
 use crate::databases::database::DatabaseDrivers;
-use crate::settings::{CommonSettings, DatabaseSettings, GlobalSettings, ServiceSettingClean, TlsSettings, TrackerSettings};
+use crate::settings::{
+    CommonSettings, DatabaseSettings, GlobalSettings, ServiceNoSecrets, ServiceProtocol, TlsSettings, TrackerSettings,
+};
 
-#[derive(Error, Debug)]
+#[derive(Error, Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum ServerError {
     #[error("internal server error")]
     InternalServerError,
@@ -42,47 +43,68 @@ pub enum ServerError {
 
     #[error("connection cookie is not valid")]
     InvalidConnectionCookie,
-
-    #[error("bad server configuration")]
-    ServiceSettingsError { message: String, source: ServiceSettingsError },
 }
 
 impl Reject for ServerError {}
 
-#[derive(Error, Debug)]
+#[derive(Error, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum SettingsManagerError {
     #[error("Unable find existing configuration: \".{source}\"")]
     NoExistingConfigFile { source: FilePathError },
-    #[error("File Exists!: \"{path}\"")]
-    ExistingFile { path: PathBuf },
-    #[error("Path is not a Directory!: \"{path}\"")]
-    NotDirectory { path: PathBuf },
+    #[error("File Exists!: \"{at}\"")]
+    ExistingFile { at: PathBuf },
+    #[error("Path is not a Directory!: \"{at}\"")]
+    NotDirectory { at: PathBuf },
 
-    #[error("Path is not a Directory at: \"{path}\" : {source}!")]
-    FailedToCreateConfigDirectory { path: PathBuf, source: io::Error },
-
-    #[error("Unable to open file: \"{path}\" : {source}")]
-    FailedToOpenFile { path: PathBuf, source: io::Error },
-    #[error("Unable to read in from: \"{path_from}\" : {source}")]
-    FailedToReadIn { path_from: PathBuf, source: serde_json::Error },
-    #[error("Unable to write out to: \"{path_to}\" : {source}")]
-    FailedToWriteOut { path_to: PathBuf, source: serde_json::Error },
-
-    #[error("Unable to read old settings from: \"{path_from}\" : {source}")]
-    FailedToReadOld { path_from: PathBuf, source: io::Error },
-    #[error("Unable to parse in old settings from: \"{path_from}\" : {source}")]
-    FailedToParseInOld { path_from: PathBuf, source: toml::de::Error },
-    #[error("Unable to import old settings from: \"{path_from}\" : \"{source}\"")]
-    FailedToImportOldSettings { path_from: PathBuf, source: Box<SettingsError> },
-    #[error("Unable to move successfully imported old settings from: {path_from} to: {path_to} \"{source}\"")]
-    FailedToMoveOldSettingsFile {
-        path_from: PathBuf,
-        path_to: PathBuf,
-        source: io::Error,
+    #[error("Path is not a Directory at: \"{at}\" : {kind}: {message}!")]
+    FailedToCreateConfigDirectory {
+        at: PathBuf,
+        kind: io::ErrorKind,
+        message: String,
     },
+    #[error("Unable to create new file at: \"{at}\" : {source}!")]
+    FailedToCreateNewFile { at: PathBuf, source: FilePathError },
+    #[error("Unable to open file: \"{at}\" : {kind}: {message}.")]
+    FailedToOpenFile {
+        at: PathBuf,
+        kind: io::ErrorKind,
+        message: String,
+    },
+    #[error("Unable to read file: \"{from}\" : {kind}: {message}.")]
+    FailedToReadFile {
+        from: PathBuf,
+        kind: io::ErrorKind,
+        message: String,
+    },
+    #[error("Unable to write file:  \"{to}\" : {kind}: {message}.")]
+    FailedToWriteFile {
+        to: PathBuf,
+        kind: io::ErrorKind,
+        message: String,
+    },
+    #[error("Unable to import old settings from: \"{from}\" : \"{source}\"")]
+    FailedToImportOldSettings { from: PathBuf, source: Box<SettingsError> },
+    #[error("Unable to move successfully imported old settings from: {from} to: {to} \"{kind}: {message}\"")]
+    FailedToMoveOldSettingsFile {
+        from: PathBuf,
+        to: PathBuf,
+        kind: io::ErrorKind,
+        message: String,
+    },
+
+    #[error("Unable to read in json: \"{from}\" : {message}")]
+    FailedToReadIn { from: PathBuf, message: String },
+    #[error("Unable to read json: {message}")]
+    FailedToReadBuffer { message: String },
+    #[error("Unable to write out json: \"{to}\" : {message}")]
+    FailedToWriteOut { to: PathBuf, message: String },
+    #[error("Unable to write json: {message}")]
+    FailedToWriteBuffer { message: String },
+    #[error("Unable to parse in old settings from: \"{from}\" : {message}.")]
+    FailedToParseInOld { from: PathBuf, message: String },
 }
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum SettingsError {
     #[error("Bad Namespace: \".{field}\" {message}")]
     NamespaceError { message: String, field: String },
@@ -128,7 +150,7 @@ pub enum SettingsError {
     },
 }
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum TrackerSettingsError {
     #[error("Required Field is missing (null)!")]
     MissingRequiredField { field: String, data: TrackerSettings },
@@ -143,16 +165,16 @@ impl TrackerSettingsError {
     }
 }
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum GlobalSettingsError {
     #[error("Required Field is missing (null)!")]
     MissingRequiredField { field: String, data: GlobalSettings },
 
-    #[error("Bad Socket String: \"{input}\".")]
+    #[error("Bad Socket String: \"{input}\", {message}")]
     ExternalIpBadSyntax {
         field: String,
         input: String,
-        source: AddrParseError,
+        message: String,
         data: GlobalSettings,
     },
 }
@@ -164,7 +186,7 @@ impl GlobalSettingsError {
             Self::ExternalIpBadSyntax {
                 field,
                 input: _,
-                source: _,
+                message: _,
                 data: _,
             } => field,
         }
@@ -172,7 +194,7 @@ impl GlobalSettingsError {
     }
 }
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum CommonSettingsError {
     #[error("Required Field is missing (null)!")]
     MissingRequiredField { field: String, data: CommonSettings },
@@ -191,7 +213,7 @@ impl CommonSettingsError {
     }
 }
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum DatabaseSettingsError {
     #[error("Required Field is missing (null)!")]
     MissingRequiredField { field: String, data: DatabaseSettings },
@@ -224,33 +246,40 @@ impl DatabaseSettingsError {
     }
 }
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum ServiceSettingsError {
     #[error("Required Field is missing (null)!")]
-    MissingRequiredField { field: String, data: ServiceSettingClean },
+    MissingRequiredField { field: String, data: ServiceNoSecrets },
 
     #[error("Required Field is empty (0 or \"\")!")]
-    EmptyRequiredField { field: String, data: ServiceSettingClean },
+    EmptyRequiredField { field: String, data: ServiceNoSecrets },
 
     #[error("Api Services Requires at least one Access Token!")]
-    ApiRequiresAccessToken { field: String, data: ServiceSettingClean },
+    ApiRequiresAccessToken { field: String, data: ServiceNoSecrets },
 
     #[error("TLS Services Requires TLS Settings!")]
-    TlsRequiresTlsConfig { field: String, data: ServiceSettingClean },
+    TlsRequiresTlsConfig { field: String, data: ServiceNoSecrets },
 
     #[error("Bad TLS Configuration: {source}.")]
     TlsSettingsError {
         field: String,
         source: TlsSettingsError,
-        data: ServiceSettingClean,
+        data: ServiceNoSecrets,
     },
 
     #[error("Bad Socket String: \"{input}\".")]
     BindingAddressBadSyntax {
         field: String,
         input: String,
-        source: AddrParseError,
-        data: ServiceSettingClean,
+        message: String,
+        data: ServiceNoSecrets,
+    },
+    #[error("Unexpected Service. Expected: {expected}, Found {found}.")]
+    WrongService {
+        field: String,
+        expected: ServiceProtocol,
+        found: ServiceProtocol,
+        data: ServiceNoSecrets,
     },
 }
 
@@ -269,7 +298,14 @@ impl ServiceSettingsError {
             Self::BindingAddressBadSyntax {
                 field,
                 input: _,
-                source: _,
+                message: _,
+                data: _,
+            } => field,
+
+            Self::WrongService {
+                field,
+                expected: _,
+                found: _,
                 data: _,
             } => field,
         }
@@ -277,7 +313,7 @@ impl ServiceSettingsError {
     }
 }
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum TlsSettingsError {
     #[error("Required Field is missing (null)!")]
     MissingRequiredField { field: String, data: TlsSettings },
@@ -304,34 +340,44 @@ impl TlsSettingsError {
     }
 }
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum FilePathError {
-    #[error("File Path failed to Canonicalize: {input}, {message}")]
-    FilePathIsUnresolvable { input: PathBuf, message: String },
+    #[error("File Path failed to Canonicalize: {input}, {kind}: {message}.")]
+    FilePathIsUnresolvable {
+        input: PathBuf,
+        kind: io::ErrorKind,
+        message: String,
+    },
 
-    #[error("File Path destination is not a file: {input}")]
-    FilePathIsNotAFile { input: PathBuf },
+    #[error("File Path destination is not a file: {input}, {kind}: {message}.")]
+    FilePathIsNotAvailable {
+        input: PathBuf,
+        kind: io::ErrorKind,
+        message: String,
+    },
 }
 
 pub mod helpers {
+    use std::fs::{File, OpenOptions};
     use std::path::{Path, PathBuf};
 
     use crate::errors::FilePathError;
 
-    pub fn get_existing_file_path(file_path: &PathBuf) -> Result<PathBuf, FilePathError> {
-        match Path::new(file_path).canonicalize() {
-            Ok(path) => {
-                if path.is_file() {
-                    Ok(path)
-                } else {
-                    Err(FilePathError::FilePathIsNotAFile { input: path })
-                }
-            }
+    pub fn get_file_at(at: &PathBuf, mode: &OpenOptions) -> Result<(File, PathBuf), FilePathError> {
+        let file = mode.open(at).map_err(|error| FilePathError::FilePathIsNotAvailable {
+            input: at.to_owned(),
+            kind: error.kind(),
+            message: error.to_string(),
+        })?;
 
-            Err(error) => Err(FilePathError::FilePathIsUnresolvable {
-                input: file_path.to_owned(),
+        let at = Path::new(at)
+            .canonicalize()
+            .map_err(|error| FilePathError::FilePathIsUnresolvable {
+                input: at.to_owned(),
+                kind: error.kind(),
                 message: error.to_string(),
-            }),
-        }
+            })?;
+
+        Ok((file, at))
     }
 }

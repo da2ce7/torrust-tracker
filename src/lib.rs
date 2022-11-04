@@ -12,6 +12,8 @@ pub mod udp;
 
 pub mod config_const {
     pub const CONFIG_FOLDER: &str = "config";
+    pub const CONFIG_BACKUP_FOLDER: &str = "config.backup";
+    pub const CONFIG_ERROR_FOLDER: &str = "config.error";
     pub const CONFIG_DEFAULT: &str = "default";
     pub const CONFIG_LOCAL: &str = "local";
     pub const CONFIG_OVERRIDE: &str = "override";
@@ -38,4 +40,8 @@ pub mod ephemeral_instance_keys {
     lazy_static! {
         pub static ref RANDOM_SEED: Seed = Rng::gen(&mut ThreadRng::default());
     }
+}
+
+pub trait Empty: Sized {
+    fn empty() -> Self;
 }

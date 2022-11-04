@@ -1,7 +1,12 @@
 use std::collections::BTreeMap;
+use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::str::FromStr;
 
 use serde::Deserialize;
 use serde_with::serde_as;
+
+use super::{Service, ServiceProtocol, TlsSettings};
 
 #[derive(Deserialize, Copy, Clone, PartialEq, Eq, Debug, Hash)]
 #[serde(rename_all = "snake_case")]
@@ -26,6 +31,26 @@ pub struct UdpTrackerConfig {
     pub bind_address: Option<String>,
 }
 
+impl Into<(Service, String)> for UdpTrackerConfig {
+    fn into(self) -> (Service, String) {
+        (
+            Service {
+                enabled: self.enabled,
+                display_name: Some("UDP Service (imported)".to_string()),
+                service: Some(ServiceProtocol::Udp),
+                socket: self
+                    .bind_address
+                    .as_ref()
+                    .map(|socket| SocketAddr::from_str(socket.as_str()).ok())
+                    .unwrap_or(None),
+                tls: None,
+                api_tokens: None,
+            },
+            "udp_imported".to_string(),
+        )
+    }
+}
+
 #[serde_as]
 #[derive(Deserialize, PartialEq, Eq, Debug, Clone, Default)]
 pub struct HttpTrackerConfig {
@@ -37,11 +62,82 @@ pub struct HttpTrackerConfig {
     pub ssl_key_path: Option<String>,
 }
 
+impl Into<(Service, String)> for HttpTrackerConfig {
+    fn into(self) -> (Service, String) {
+        if self.ssl_enabled.unwrap_or_default() {
+            (
+                Service {
+                    enabled: self.enabled,
+                    display_name: Some("TLS Service (imported)".to_string()),
+                    service: Some(ServiceProtocol::Tls),
+                    socket: self
+                        .bind_address
+                        .as_ref()
+                        .map(|socket| SocketAddr::from_str(socket.as_str()).ok())
+                        .unwrap_or(None),
+                    tls: Some(TlsSettings {
+                        certificate_file_path: {
+                            self.ssl_cert_path
+                                .as_ref()
+                                .map(|path| PathBuf::from_str(path.as_str()).ok())
+                                .unwrap_or(None)
+                        },
+                        key_file_path: {
+                            self.ssl_key_path
+                                .as_ref()
+                                .map(|path| PathBuf::from_str(path.as_str()).ok())
+                                .unwrap_or(None)
+                        },
+                    }),
+                    api_tokens: None,
+                },
+                "tls_imported".to_string(),
+            )
+        } else {
+            (
+                Service {
+                    enabled: self.enabled,
+                    display_name: Some("HTTP Service(imported)".to_string()),
+                    service: Some(ServiceProtocol::Http),
+                    socket: self
+                        .bind_address
+                        .as_ref()
+                        .map(|socket| SocketAddr::from_str(socket.as_str()).ok())
+                        .unwrap_or(None),
+                    tls: None,
+                    api_tokens: None,
+                },
+                "http_imported".to_string(),
+            )
+        }
+    }
+}
+
 #[derive(Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct HttpApiConfig {
     pub enabled: Option<bool>,
     pub bind_address: Option<String>,
     pub access_tokens: Option<BTreeMap<String, String>>,
+}
+
+impl Into<(Service, String)> for HttpApiConfig {
+    fn into(self) -> (Service, String) {
+        (
+            Service {
+                enabled: self.enabled,
+                display_name: Some("HTTP API (imported)".to_string()),
+                service: Some(ServiceProtocol::Api),
+                socket: self
+                    .bind_address
+                    .as_ref()
+                    .map(|socket| SocketAddr::from_str(socket.as_str()).ok())
+                    .unwrap_or(None),
+                tls: None,
+                api_tokens: self.access_tokens.clone(),
+            },
+            "api_imported".to_string(),
+        )
+    }
 }
 
 #[serde_as]

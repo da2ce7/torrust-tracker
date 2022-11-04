@@ -8,8 +8,7 @@ use r2d2_mysql::mysql::prelude::Queryable;
 use r2d2_mysql::mysql::{params, Opts, OptsBuilder};
 use r2d2_mysql::MysqlConnectionManager;
 
-use crate::databases::database;
-use crate::databases::database::{Database, Error};
+use crate::databases::database::{self, Database, DatabaseDrivers, Error};
 use crate::errors::DatabaseSettingsError;
 use crate::protocol::common::{InfoHash, AUTH_KEY_LENGTH};
 use crate::settings::DatabaseSettings;
@@ -22,8 +21,18 @@ pub struct MySqlDatabaseSettings {
 impl TryFrom<&DatabaseSettings> for MySqlDatabaseSettings {
     type Error = DatabaseSettingsError;
 
-    fn try_from(_value: &DatabaseSettings) -> Result<Self, Self::Error> {
-        todo!()
+    fn try_from(value: &DatabaseSettings) -> Result<Self, Self::Error> {
+        match value.get_driver()? {
+            DatabaseDrivers::MySQL => Ok(MySqlDatabaseSettings {
+                connection_url: value.get_my_sql_connection_url()?,
+            }),
+            driver => Err(DatabaseSettingsError::WrongDriver {
+                field: "driver".to_string(),
+                expected: DatabaseDrivers::MySQL,
+                actual: driver,
+                data: value.to_owned(),
+            }),
+        }
     }
 }
 

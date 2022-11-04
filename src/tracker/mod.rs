@@ -42,7 +42,7 @@ pub mod helpers {
         pub fn mode(self, tracker_mode: TrackerMode) -> Self {
             TrackerArgs {
                 global: Arc::new(
-                    GlobalSettingsBuilder::from(&*self.global)
+                    GlobalSettingsBuilder::from(self.global)
                         .with_mode(tracker_mode)
                         .try_into()
                         .unwrap(),
@@ -56,7 +56,7 @@ pub mod helpers {
         pub fn external_ip(self, external_ip: &IpAddr) -> Self {
             TrackerArgs {
                 global: Arc::new(
-                    GlobalSettingsBuilder::from(&*self.global)
+                    GlobalSettingsBuilder::from(self.global)
                         .with_external_ip(external_ip)
                         .try_into()
                         .unwrap(),
@@ -70,7 +70,7 @@ pub mod helpers {
         pub fn no_logs(self) -> Self {
             TrackerArgs {
                 global: Arc::new(
-                    GlobalSettingsBuilder::from(&*self.global)
+                    GlobalSettingsBuilder::from(self.global)
                         .with_log_filter(&LogFilterLevel::Off)
                         .try_into()
                         .unwrap(),

@@ -34,6 +34,7 @@ mod udp_tracker_server {
             Self {
                 tracker: TrackerArgs::new().no_logs().mode(TrackerMode::Public),
                 service: UdpServiceSettings {
+                    enabled: true,
                     id: "test".to_string(),
                     display_name: "UDP Test Service".to_string(),
                     socket: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, ephemeral_random_port())),
@@ -83,7 +84,7 @@ mod udp_tracker_server {
                 logging::setup_logging(&settings.tracker.global);
 
                 // Start the UDP tracker job
-                self.job = Some(udp_tracker::start_job(&settings.service, tracker.clone()));
+                self.job = Some(udp_tracker::start_job(&settings.service, tracker));
 
                 self.socket = Some(settings.service.socket);
 
@@ -152,7 +153,7 @@ mod udp_tracker_server {
                 Err(_) => panic!("could not write request to bytes."),
             };
 
-            self.udp_client.send(&request_data).await
+            self.udp_client.send(request_data).await
         }
 
         async fn receive(&self) -> Response {

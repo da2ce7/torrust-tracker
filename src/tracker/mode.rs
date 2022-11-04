@@ -2,7 +2,7 @@ use derive_more::Display;
 use serde;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Copy, Clone, PartialEq, Eq, Debug, Hash, Display)]
+#[derive(Serialize, Deserialize, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash, Display)]
 #[serde(rename_all = "snake_case")]
 pub enum TrackerMode {
     // Will track every new info hash and serve every peer.

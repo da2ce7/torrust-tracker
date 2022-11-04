@@ -1,5 +1,6 @@
 {
     "cSpell.words": [
+        "bufs",
         "byteorder",
         "canonicalize",
         "canonicalized",
@@ -10,6 +11,7 @@
         "nocapture",
         "rngs",
         "Seedable",
+        "sqllite",
         "thiserror",
         "torrust",
         "typenum",
