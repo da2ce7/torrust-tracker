@@ -6,7 +6,7 @@ use tokio::task::JoinHandle;
 
 use crate::api::server::ApiServiceSettings;
 use crate::http::{HttpServiceSettings, TlsServiceSettings};
-use crate::jobs::{http_tracker, torrent_cleanup, tracker_api, udp_tracker};
+use crate::jobs::{http_tracker, tls_tracker, torrent_cleanup, tracker_api, udp_tracker};
 use crate::settings::{ServiceProtocol, Services};
 use crate::tracker::core::TorrentTracker;
 use crate::udp::UdpServiceSettings;
@@ -96,7 +96,7 @@ pub async fn setup(services: &Services, tracker: Arc<TorrentTracker>) -> Vec<Joi
 
     // Start the TLS blocks
     for service_settings in tls_services {
-        jobs.push(http_tracker::start_tls_job(&service_settings, tracker.clone()))
+        jobs.push(tls_tracker::start_tls_job(&service_settings, tracker.clone()))
     }
 
     // Start the API blocks
