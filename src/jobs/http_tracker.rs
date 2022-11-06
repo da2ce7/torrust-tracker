@@ -4,7 +4,7 @@ use log::info;
 use tokio::task::JoinHandle;
 
 use crate::http::{HttpServer, HttpServiceSettings, TlsServiceSettings};
-use crate::tracker::tracker::TorrentTracker;
+use crate::tracker::core::TorrentTracker;
 
 pub fn start_http_job(settings: &HttpServiceSettings, tracker: Arc<TorrentTracker>) -> JoinHandle<()> {
     let settings = settings.to_owned();

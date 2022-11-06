@@ -9,7 +9,7 @@ use r2d2_sqlite::SqliteConnectionManager;
 use super::database::DatabaseDrivers::{self};
 use crate::databases::database;
 use crate::databases::database::{Database, Error};
-use crate::errors::DatabaseSettingsError;
+use crate::errors::settings::DatabaseSettingsError;
 use crate::protocol::clock::DurationSinceUnixEpoch;
 use crate::protocol::common::InfoHash;
 use crate::settings::DatabaseSettings;
@@ -162,7 +162,7 @@ impl Database for SqliteDatabase {
         let conn = self.pool.get().map_err(|_| database::Error::DatabaseError)?;
 
         let mut stmt = conn.prepare("SELECT info_hash FROM whitelist WHERE info_hash = ?")?;
-        let mut rows = stmt.query(&[info_hash])?;
+        let mut rows = stmt.query([info_hash])?;
 
         if let Some(row) = rows.next()? {
             let info_hash: String = row.get(0).unwrap();
@@ -250,7 +250,7 @@ impl Database for SqliteDatabase {
     async fn remove_key_from_keys(&self, key: &str) -> Result<usize, database::Error> {
         let conn = self.pool.get().map_err(|_| database::Error::DatabaseError)?;
 
-        match conn.execute("DELETE FROM keys WHERE key = ?", &[key]) {
+        match conn.execute("DELETE FROM keys WHERE key = ?", [key]) {
             Ok(updated) => {
                 if updated > 0 {
                     return Ok(updated);

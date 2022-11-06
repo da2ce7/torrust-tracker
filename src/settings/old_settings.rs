@@ -31,14 +31,14 @@ pub struct UdpTrackerConfig {
     pub bind_address: Option<String>,
 }
 
-impl Into<(Service, String)> for UdpTrackerConfig {
-    fn into(self) -> (Service, String) {
+impl From<UdpTrackerConfig> for (Service, String) {
+    fn from(val: UdpTrackerConfig) -> Self {
         (
             Service {
-                enabled: self.enabled,
+                enabled: val.enabled,
                 display_name: Some("UDP Service (imported)".to_string()),
                 service: Some(ServiceProtocol::Udp),
-                socket: self
+                socket: val
                     .bind_address
                     .as_ref()
                     .map(|socket| SocketAddr::from_str(socket.as_str()).ok())
@@ -62,28 +62,28 @@ pub struct HttpTrackerConfig {
     pub ssl_key_path: Option<String>,
 }
 
-impl Into<(Service, String)> for HttpTrackerConfig {
-    fn into(self) -> (Service, String) {
-        if self.ssl_enabled.unwrap_or_default() {
+impl From<HttpTrackerConfig> for (Service, String) {
+    fn from(val: HttpTrackerConfig) -> Self {
+        if val.ssl_enabled.unwrap_or_default() {
             (
                 Service {
-                    enabled: self.enabled,
+                    enabled: val.enabled,
                     display_name: Some("TLS Service (imported)".to_string()),
                     service: Some(ServiceProtocol::Tls),
-                    socket: self
+                    socket: val
                         .bind_address
                         .as_ref()
                         .map(|socket| SocketAddr::from_str(socket.as_str()).ok())
                         .unwrap_or(None),
                     tls: Some(TlsSettings {
                         certificate_file_path: {
-                            self.ssl_cert_path
+                            val.ssl_cert_path
                                 .as_ref()
                                 .map(|path| PathBuf::from_str(path.as_str()).ok())
                                 .unwrap_or(None)
                         },
                         key_file_path: {
-                            self.ssl_key_path
+                            val.ssl_key_path
                                 .as_ref()
                                 .map(|path| PathBuf::from_str(path.as_str()).ok())
                                 .unwrap_or(None)
@@ -96,10 +96,10 @@ impl Into<(Service, String)> for HttpTrackerConfig {
         } else {
             (
                 Service {
-                    enabled: self.enabled,
+                    enabled: val.enabled,
                     display_name: Some("HTTP Service(imported)".to_string()),
                     service: Some(ServiceProtocol::Http),
-                    socket: self
+                    socket: val
                         .bind_address
                         .as_ref()
                         .map(|socket| SocketAddr::from_str(socket.as_str()).ok())
@@ -120,20 +120,20 @@ pub struct HttpApiConfig {
     pub access_tokens: Option<BTreeMap<String, String>>,
 }
 
-impl Into<(Service, String)> for HttpApiConfig {
-    fn into(self) -> (Service, String) {
+impl From<HttpApiConfig> for (Service, String) {
+    fn from(val: HttpApiConfig) -> Self {
         (
             Service {
-                enabled: self.enabled,
+                enabled: val.enabled,
                 display_name: Some("HTTP API (imported)".to_string()),
                 service: Some(ServiceProtocol::Api),
-                socket: self
+                socket: val
                     .bind_address
                     .as_ref()
                     .map(|socket| SocketAddr::from_str(socket.as_str()).ok())
                     .unwrap_or(None),
                 tls: None,
-                api_tokens: self.access_tokens.clone(),
+                api_tokens: val.access_tokens,
             },
             "api_imported".to_string(),
         )

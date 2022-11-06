@@ -8,11 +8,11 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use warp::{filters, reply, serve, Filter};
 
-use crate::errors::ServiceSettingsError;
+use crate::errors::settings::ServiceSettingsError;
 use crate::protocol::common::*;
 use crate::settings::{Service, ServiceProtocol};
+use crate::tracker::core::TorrentTracker;
 use crate::tracker::peer::TorrentPeer;
-use crate::tracker::tracker::TorrentTracker;
 use crate::{check_field_is_not_empty, check_field_is_not_none};
 
 pub type ApiTokens = BTreeMap<String, String>;
@@ -188,10 +188,7 @@ pub fn start(settings: &ApiServiceSettings, tracker: Arc<TorrentTracker>) -> imp
     let view_stats_list = filters::method::get()
         .and(filters::path::path("stats"))
         .and(filters::path::end())
-        .map(move || {
-            let tracker = api_stats.clone();
-            tracker
-        })
+        .map(move || api_stats.clone())
         .and_then(|tracker: Arc<TorrentTracker>| async move {
             let mut results = Stats {
                 torrents: 0,
@@ -363,10 +360,7 @@ pub fn start(settings: &ApiServiceSettings, tracker: Arc<TorrentTracker>) -> imp
         .and(filters::path::path("whitelist"))
         .and(filters::path::path("reload"))
         .and(filters::path::end())
-        .map(move || {
-            let tracker = t7.clone();
-            tracker
-        })
+        .map(move || t7.clone())
         .and_then(|tracker: Arc<TorrentTracker>| async move {
             match tracker.load_whitelist().await {
                 Ok(_) => Ok(warp::reply::json(&ActionStatus::Ok)),
@@ -378,15 +372,12 @@ pub fn start(settings: &ApiServiceSettings, tracker: Arc<TorrentTracker>) -> imp
 
     // GET /api/keys/reload
     // Reload whitelist
-    let t8 = tracker.clone();
+    let t8 = tracker;
     let reload_keys = filters::method::get()
         .and(filters::path::path("keys"))
         .and(filters::path::path("reload"))
         .and(filters::path::end())
-        .map(move || {
-            let tracker = t8.clone();
-            tracker
-        })
+        .map(move || t8.clone())
         .and_then(|tracker: Arc<TorrentTracker>| async move {
             match tracker.load_keys().await {
                 Ok(_) => Ok(warp::reply::json(&ActionStatus::Ok)),

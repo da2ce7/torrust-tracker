@@ -18,9 +18,9 @@ mod udp_tracker_server {
     use tokio::net::UdpSocket;
     use tokio::task::JoinHandle;
     use torrust_tracker::jobs::udp_tracker;
+    use torrust_tracker::tracker::core::TorrentTracker;
     use torrust_tracker::tracker::helpers::TrackerArgs;
     use torrust_tracker::tracker::mode::TrackerMode;
-    use torrust_tracker::tracker::tracker::TorrentTracker;
     use torrust_tracker::udp::{UdpServiceSettings, MAX_PACKET_SIZE};
     use torrust_tracker::{logging, static_time};
 
@@ -195,30 +195,24 @@ mod udp_tracker_server {
 
     fn is_error_response(response: &Response, error_message: &str) -> bool {
         match response {
-            Response::Error(error_response) => return error_response.message.starts_with(error_message),
-            _ => return false,
-        };
+            Response::Error(error_response) => error_response.message.starts_with(error_message),
+            _ => false,
+        }
     }
 
     fn is_connect_response(response: &Response, transaction_id: TransactionId) -> bool {
         match response {
-            Response::Connect(connect_response) => return connect_response.transaction_id == transaction_id,
-            _ => return false,
-        };
+            Response::Connect(connect_response) => connect_response.transaction_id == transaction_id,
+            _ => false,
+        }
     }
 
     fn is_ipv4_announce_response(response: &Response) -> bool {
-        match response {
-            Response::AnnounceIpv4(_) => return true,
-            _ => return false,
-        };
+        matches!(response, Response::AnnounceIpv4(_))
     }
 
     fn is_scrape_response(response: &Response) -> bool {
-        match response {
-            Response::Scrape(_) => return true,
-            _ => return false,
-        };
+        matches!(response, Response::Scrape(_))
     }
 
     #[tokio::test]

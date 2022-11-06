@@ -8,7 +8,7 @@ use crate::api::server::ApiServiceSettings;
 use crate::http::{HttpServiceSettings, TlsServiceSettings};
 use crate::jobs::{http_tracker, torrent_cleanup, tracker_api, udp_tracker};
 use crate::settings::{ServiceProtocol, Services};
-use crate::tracker::tracker::TorrentTracker;
+use crate::tracker::core::TorrentTracker;
 use crate::udp::UdpServiceSettings;
 
 pub async fn setup(services: &Services, tracker: Arc<TorrentTracker>) -> Vec<JoinHandle<()>> {

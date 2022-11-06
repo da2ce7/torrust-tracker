@@ -9,7 +9,7 @@ use r2d2_mysql::mysql::{params, Opts, OptsBuilder};
 use r2d2_mysql::MysqlConnectionManager;
 
 use crate::databases::database::{self, Database, DatabaseDrivers, Error};
-use crate::errors::DatabaseSettingsError;
+use crate::errors::settings::DatabaseSettingsError;
 use crate::protocol::common::{InfoHash, AUTH_KEY_LENGTH};
 use crate::settings::DatabaseSettings;
 use crate::tracker::key::AuthKey;

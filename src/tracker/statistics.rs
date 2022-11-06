@@ -7,7 +7,7 @@ use tokio::sync::{mpsc, RwLock, RwLockReadGuard};
 
 const CHANNEL_BUFFER_SIZE: usize = 65_535;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TrackerStatisticsEvent {
     Tcp4Announce,
     Tcp4Scrape,
@@ -53,6 +53,12 @@ impl TrackerStatistics {
             udp6_announces_handled: 0,
             udp6_scrapes_handled: 0,
         }
+    }
+}
+
+impl Default for TrackerStatistics {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -142,6 +148,12 @@ impl StatsTracker {
                 drop(stats_lock);
             }
         });
+    }
+}
+
+impl Default for StatsTracker {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

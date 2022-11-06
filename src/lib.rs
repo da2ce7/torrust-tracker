@@ -1,6 +1,7 @@
 pub mod api;
 pub mod databases;
 pub mod errors;
+pub mod helpers;
 pub mod http;
 pub mod jobs;
 pub mod logging;

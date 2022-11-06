@@ -4,7 +4,7 @@ use log::info;
 use tokio::task::JoinHandle;
 
 use crate::api::server::{self, ApiServiceSettings};
-use crate::tracker::tracker::TorrentTracker;
+use crate::tracker::core::TorrentTracker;
 
 pub fn start_job(settings: &ApiServiceSettings, tracker: Arc<TorrentTracker>) -> JoinHandle<()> {
     info!("Starting Torrust API server on: {}", settings.socket);

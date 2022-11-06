@@ -41,7 +41,7 @@ impl std::str::FromStr for InfoHash {
     type Err = binascii::ConvertError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut i = Self { 0: [0u8; 20] };
+        let mut i = Self([0u8; 20]);
         if s.len() != 40 {
             return Err(binascii::ConvertError::InvalidInputLength);
         }
@@ -65,15 +65,15 @@ impl Ord for InfoHash {
 impl std::convert::From<&[u8]> for InfoHash {
     fn from(data: &[u8]) -> InfoHash {
         assert_eq!(data.len(), 20);
-        let mut ret = InfoHash { 0: [0u8; 20] };
+        let mut ret = InfoHash([0u8; 20]);
         ret.0.clone_from_slice(data);
-        return ret;
+        ret
     }
 }
 
-impl std::convert::Into<InfoHash> for [u8; 20] {
-    fn into(self) -> InfoHash {
-        InfoHash { 0: self }
+impl From<[u8; 20]> for InfoHash {
+    fn from(val: [u8; 20]) -> Self {
+        InfoHash(val)
     }
 }
 
@@ -204,15 +204,15 @@ impl<'v> serde::de::Visitor<'v> for InfoHashVisitor {
             ));
         }
 
-        let mut res = InfoHash { 0: [0u8; 20] };
+        let mut res = InfoHash([0u8; 20]);
 
-        if let Err(_) = binascii::hex2bin(v.as_bytes(), &mut res.0) {
+        if binascii::hex2bin(v.as_bytes(), &mut res.0).is_err() {
             return Err(serde::de::Error::invalid_value(
                 serde::de::Unexpected::Str(v),
                 &"expected a hexadecimal string",
             ));
         } else {
-            return Ok(res);
+            Ok(res)
         }
     }
 }
@@ -220,15 +220,14 @@ impl<'v> serde::de::Visitor<'v> for InfoHashVisitor {
 #[derive(PartialEq, Eq, Hash, Clone, Debug, PartialOrd, Ord)]
 pub struct PeerId(pub [u8; 20]);
 
-impl PeerId {
-    pub fn to_string(&self) -> String {
+impl std::fmt::Display for PeerId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut buffer = [0u8; 20];
         let bytes_out = binascii::bin2hex(&self.0, &mut buffer).ok();
-        return if let Some(bytes_out) = bytes_out {
-            String::from(std::str::from_utf8(bytes_out).unwrap())
-        } else {
-            "".to_string()
-        };
+        match bytes_out {
+            Some(bytes) => write!(f, "{}", std::str::from_utf8(bytes).unwrap()),
+            None => write!(f, ""),
+        }
     }
 }
 
@@ -294,7 +293,7 @@ impl PeerId {
                 b"UL" => "uLeecher!",
                 b"UT" => "µTorrent",
                 b"UW" => "µTorrent Web",
-                b"VG" => "Vagaa",
+                b"VG" => "Vagal",
                 b"WD" => "WebTorrent Desktop",
                 b"WT" => "BitLet",
                 b"WW" => "WebTorrent",

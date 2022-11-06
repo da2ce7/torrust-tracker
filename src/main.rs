@@ -2,9 +2,10 @@ use std::sync::Arc;
 
 use log::info;
 use torrust_tracker::databases::database;
-use torrust_tracker::settings::{TrackerSettings, TrackerSettingsBuilder};
+use torrust_tracker::settings::manager::SettingsManager;
+use torrust_tracker::settings::{Settings, TrackerSettings};
+use torrust_tracker::tracker::core::TorrentTracker;
 use torrust_tracker::tracker::statistics::StatsTracker;
-use torrust_tracker::tracker::tracker::TorrentTracker;
 use torrust_tracker::{ephemeral_instance_keys, logging, setup, static_time};
 
 #[tokio::main]
@@ -15,11 +16,19 @@ async fn main() {
     // Initialize the Ephemeral Instance Random Seed
     lazy_static::initialize(&ephemeral_instance_keys::RANDOM_SEED);
 
+    // Initialize Torrust Settings Manager
+    let manager = match SettingsManager::setup() {
+        Ok(manager) => manager,
+        Err(err) => {
+            panic!("{err:?}")
+        }
+    };
+
     // Initialize Torrust Settings
-    let settings: TrackerSettings = match TrackerSettingsBuilder::default().try_into() {
-        Ok(settings) => settings,
-        Err(error) => {
-            panic!("{error:?}")
+    let settings: TrackerSettings = match Settings::try_from(manager) {
+        Ok(settings) => settings.into(),
+        Err(errored) => {
+            panic!("{errored:?}")
         }
     };
 
@@ -48,7 +57,7 @@ async fn main() {
     };
 
     // Initialize logging
-    logging::setup_logging(&settings.global.as_ref().unwrap());
+    logging::setup_logging(settings.global.as_ref().unwrap());
 
     // Run jobs
     let jobs = setup::setup(&settings.services.unwrap(), tracker.clone()).await;

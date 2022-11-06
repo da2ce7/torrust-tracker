@@ -15,11 +15,11 @@ use crate::api::server::{ApiServiceSettings, ApiTokens};
 use crate::databases::database::DatabaseDrivers;
 use crate::databases::mysql::MySqlDatabaseSettings;
 use crate::databases::sqlite::Sqlite3DatabaseSettings;
-use crate::errors::helpers::get_file_at;
-use crate::errors::{
+use crate::errors::settings::{
     CommonSettingsError, DatabaseSettingsError, GlobalSettingsError, ServiceSettingsError, SettingsError, TlsSettingsError,
     TrackerSettingsError,
 };
+use crate::helpers::get_file_at;
 use crate::http::{HttpServiceSettings, TlsServiceSettings};
 use crate::tracker::mode::TrackerMode;
 use crate::udp::UdpServiceSettings;
@@ -98,6 +98,13 @@ const SETTINGS_NAMESPACE: &str = "org.torrust.tracker.config";
 const SETTINGS_NAMESPACE_ERRORED: &str = "org.torrust.tracker.config.errored";
 const SETTINGS_VERSION: &str = "1.0.0";
 
+/// Only used to check what is the namespace when deserializing.
+#[derive(Deserialize)]
+pub struct SettingsNamespace {
+    pub namespace: String,
+}
+
+/// With an extra 'error' field, used when there are deserializing problems.
 #[derive(Serialize, Deserialize, PartialEq, PartialOrd, Ord, Eq, Debug, Clone, Hash)]
 pub struct SettingsErrored {
     pub namespace: String,
@@ -121,7 +128,7 @@ impl SettingsErrored {
 pub struct Settings {
     pub namespace: String,
     pub version: String,
-    pub tracker: TrackerSettings,
+    tracker: TrackerSettings,
 }
 
 impl Default for Settings {
@@ -151,6 +158,12 @@ impl From<TrackerSettings> for Settings {
             version: SETTINGS_VERSION.to_string(),
             tracker,
         }
+    }
+}
+
+impl From<Settings> for TrackerSettings {
+    fn from(settings: Settings) -> Self {
+        settings.tracker
     }
 }
 

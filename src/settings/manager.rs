@@ -2,15 +2,19 @@ use std::collections::hash_map::DefaultHasher;
 use std::ffi::OsString;
 use std::fs::{self, OpenOptions};
 use std::hash::{Hash, Hasher};
-use std::io::{self, Cursor, Read, Write};
+use std::io::{Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 
 use log::{info, warn};
 
-use super::{Settings, SettingsErrored, TrackerSettings, TrackerSettingsBuilder, SETTINGS_NAMESPACE, SETTINGS_NAMESPACE_ERRORED};
+use super::{
+    Settings, SettingsErrored, SettingsNamespace, TrackerSettings, TrackerSettingsBuilder, SETTINGS_NAMESPACE,
+    SETTINGS_NAMESPACE_ERRORED,
+};
 use crate::config_const::{CONFIG_BACKUP_FOLDER, CONFIG_DEFAULT, CONFIG_ERROR_FOLDER, CONFIG_FOLDER, CONFIG_LOCAL, CONFIG_OLD};
-use crate::errors::helpers::get_file_at;
-use crate::errors::SettingsManagerError;
+use crate::errors::settings_manager::SettingsManagerError;
+use crate::errors::wrappers::{IoError, SerdeJsonError};
+use crate::helpers::get_file_at;
 use crate::settings::{Clean, Fix};
 use crate::Empty;
 
@@ -30,6 +34,14 @@ impl Default for SettingsManager {
 impl From<Settings> for SettingsManager {
     fn from(okay: Settings) -> Self {
         Self { settings: Ok(okay) }
+    }
+}
+
+impl TryFrom<SettingsManager> for Settings {
+    type Error = SettingsErrored;
+
+    fn try_from(manager: SettingsManager) -> Result<Self, Self::Error> {
+        manager.settings
     }
 }
 
@@ -79,8 +91,8 @@ impl SettingsManager {
         let local_settings = match Self::read(local) {
             Ok(settings) => Some(settings),
             Err(err) => match err {
-                SettingsManagerError::NoExistingConfigFile { source } => {
-                    info!("No Configuration To Load: {source}");
+                SettingsManagerError::FailedToReadFromFile { .. } => {
+                    info!("No Configuration To Load: {err}");
                     None
                 }
                 err => {
@@ -107,72 +119,87 @@ impl SettingsManager {
             }
         }
 
-        let dest = get_file_at(to, OpenOptions::new().write(true).create(true).truncate(true)).map_err(|err| {
-            SettingsManagerError::FailedToCreateNewFile {
-                at: to.to_owned(),
-                source: err,
-            }
-        })?;
+        let dest = get_file_at(to, OpenOptions::new().write(true).create(true).truncate(true))
+            .map_err(|err| SettingsManagerError::FailedToOpenFileForWriting { source: err })?;
 
-        self.write(dest.0, &dest.1)
+        self.write(dest.0)
     }
 
     pub fn write_default(to: &PathBuf) -> Result<(), SettingsManagerError> {
         let dest = get_file_at(to, OpenOptions::new().write(true).create(true).truncate(true))
-            .map_err(|err| SettingsManagerError::NoExistingConfigFile { source: err })?;
+            .map_err(|err| SettingsManagerError::FailedToOpenFileForWriting { source: err })?;
 
-        Self::default().write(dest.0, &dest.1)
+        Self::default().write(dest.0)
     }
 
     pub fn read(from: &PathBuf) -> Result<Self, SettingsManagerError> {
         let source = get_file_at(from, OpenOptions::new().read(true))
-            .map_err(|error| SettingsManagerError::NoExistingConfigFile { source: error })?;
+            .map_err(|err| SettingsManagerError::FailedToOpenFileForReading { source: err })?;
 
-        Self::read_json(source.0).map_err(|error| SettingsManagerError::FailedToReadIn {
-            from: source.1,
-            message: error.to_string(),
-        })
+        Self::read_json(source.0)
     }
 
-    pub fn write(&self, writer: impl io::Write, to: &PathBuf) -> Result<(), SettingsManagerError> {
+    pub fn write(&self, writer: impl Write) -> Result<(), SettingsManagerError> {
         self.write_json(writer)
-            .map_err(|error| SettingsManagerError::FailedToWriteOut {
-                to: to.to_owned(),
-                message: error.to_string(),
-            })
     }
 
-    pub fn read_json<R>(rdr: R) -> Result<Self, SettingsManagerError>
+    pub fn read_json<R>(mut rdr: R) -> Result<Self, SettingsManagerError>
     where
-        R: io::Read,
+        R: Read,
     {
-        match serde_json::from_reader::<R, Settings>(*rdr.by_ref()) {
-            Ok(settings) => match settings.namespace.as_str() {
-                SETTINGS_NAMESPACE => {
-                    return Ok(settings.into());
-                }
-                SETTINGS_NAMESPACE_ERRORED => serde_json::from_reader::<R, SettingsErrored>(rdr)
-                    .map_err(|error| SettingsManagerError::FailedToReadBuffer {
-                        message: error.to_string(),
+        let data: &mut Vec<u8> = &mut Default::default();
+
+        rdr.read_to_end(data)
+            .map_err(|err| SettingsManagerError::FailedToReadFromBuffer {
+                source: IoError::from(err).into(),
+            })?;
+
+        let settings = serde_json::from_reader::<Cursor<&mut Vec<u8>>, SettingsNamespace>(Cursor::new(data)).map_err(|err| {
+            SettingsManagerError::FailedToDeserializeFromJson {
+                message: "(read as \"SettingsNamespace\")".to_string(),
+                source: SerdeJsonError::from(err).into(),
+            }
+        })?;
+        {
+            match settings.namespace.as_str() {
+                SETTINGS_NAMESPACE => serde_json::from_reader::<Cursor<&mut Vec<u8>>, Settings>(Cursor::new(data))
+                    .map_err(|err| SettingsManagerError::FailedToDeserializeFromJson {
+                        message: "(read as \"Settings\")".to_string(),
+                        source: SerdeJsonError::from(err).into(),
                     })
-                    .map(|op| SettingsManager::from(op)),
-                namespace => panic!("Unknown Namespace:{namespace}"),
-            },
-            Err(err) => match err {
-                err => {
-                    panic!("{err:?}");
-                }
-            },
+                    .map(SettingsManager::from),
+
+                SETTINGS_NAMESPACE_ERRORED => serde_json::from_reader::<Cursor<&mut Vec<u8>>, SettingsErrored>(Cursor::new(data))
+                    .map_err(|err| SettingsManagerError::FailedToDeserializeFromJson {
+                        message: "(read as \"SettingsErrored\")".to_string(),
+                        source: SerdeJsonError::from(err).into(),
+                    })
+                    .map(SettingsManager::from),
+
+                namespace => Err(SettingsManagerError::FailedToMatchNamespace {
+                    namespace: namespace.to_string(),
+                }),
+            }
         }
     }
 
-    pub fn write_json<W>(&self, writer: W) -> Result<(), serde_json::Error>
+    pub fn write_json<W>(&self, writer: W) -> Result<(), SettingsManagerError>
     where
-        W: io::Write,
+        W: Write,
     {
         match &self.settings {
-            Ok(okay) => serde_json::to_writer_pretty(writer, okay),
-            Err(err) => serde_json::to_writer_pretty(writer, err),
+            Ok(okay) => {
+                serde_json::to_writer_pretty(writer, okay).map_err(|err| SettingsManagerError::FailedToDeserializeFromJson {
+                    message: "(read as \"Settings\")".to_string(),
+                    source: SerdeJsonError::from(err).into(),
+                })
+            }
+            Err(err) => {
+                serde_json::to_writer_pretty(writer, err).map_err(|err| SettingsManagerError::FailedToDeserializeFromJson {
+                    message: "(read as \"SettingsErrored\")".to_string(),
+                    source: SerdeJsonError::from(err).into(),
+                })
+            }
         }
     }
 
@@ -188,23 +215,25 @@ impl SettingsManager {
         let data: &mut Vec<u8> = &mut Default::default();
 
         self.write_json(data.by_ref())
-            .map_err(|error| SettingsManagerError::FailedToWriteBuffer {
-                message: error.to_string(),
+            .map_err(|err| SettingsManagerError::FailedToWriteToFile {
+                message: "(backup)".to_string(),
+                to: to.to_path_buf(),
+
+                source: err.into(),
             })?;
 
         Self::archive(Cursor::new(data), &to.with_extension(ext), &folder)?;
         Ok(())
     }
 
-    fn archive(mut rdr: impl io::Read, from: &PathBuf, to_folder: &Path) -> Result<(), SettingsManagerError> {
+    fn archive(mut rdr: impl Read, from: &PathBuf, to_folder: &Path) -> Result<(), SettingsManagerError> {
         Self::make_folder(&to_folder.to_path_buf())?;
 
         let to_folder = to_folder
             .canonicalize()
-            .map_err(|err| SettingsManagerError::FailedToResolveDirectory {
+            .map_err(|err| SettingsManagerError::FailedToResolvePath {
                 at: to_folder.to_owned(),
-                kind: err.kind(),
-                message: err.to_string(),
+                source: IoError::from(err).into(),
             })?;
 
         let mut hasher: DefaultHasher = Default::default();
@@ -213,10 +242,13 @@ impl SettingsManager {
         // todo: lock and stream the file instead of loading the full file into memory.
         let _size = rdr
             .read_to_end(data)
-            .map_err(|error| SettingsManagerError::FailedToReadFile {
+            .map_err(|err| SettingsManagerError::FailedToReadFromBuffer {
+                source: IoError::from(err).into(),
+            })
+            .map_err(|err| SettingsManagerError::FailedToReadFromFile {
+                message: "(archive, read into)".to_string(),
                 from: from.to_owned(),
-                kind: error.kind(),
-                message: error.to_string(),
+                source: err.into(),
             })?;
 
         data.hash(&mut hasher);
@@ -234,19 +266,18 @@ impl SettingsManager {
 
         // if we do not have a backup already, lets make one.
         if to.canonicalize().is_err() {
-            let mut dest = get_file_at(&to, OpenOptions::new().write(true).create_new(true)).map_err(|err| {
-                SettingsManagerError::FailedToCreateNewFile {
-                    at: to.to_owned(),
-                    source: err,
-                }
-            })?;
+            let mut dest = get_file_at(&to, OpenOptions::new().write(true).create_new(true))
+                .map_err(|err| SettingsManagerError::FailedToCreateNewFile { source: err })?;
 
             dest.0
                 .write_all(data)
-                .map_err(|error| SettingsManagerError::FailedToWriteFile {
-                    to: dest.1.to_owned(),
-                    kind: error.kind(),
-                    message: error.to_string(),
+                .map_err(|err| SettingsManagerError::FailedToWriteToFile {
+                    to: dest.1,
+                    message: "(archive, making backup)".to_string(),
+                    source: SettingsManagerError::FailedToWriteIntoBuffer {
+                        source: IoError::from(err).into(),
+                    }
+                    .into(),
                 })?;
         };
 
@@ -272,15 +303,25 @@ impl SettingsManager {
         let _size = file
             .0
             .read_to_end(data)
-            .map_err(|error| SettingsManagerError::FailedToReadFile {
-                from: from.to_owned(),
-                kind: error.kind(),
-                message: error.to_string(),
+            .map_err(|err| SettingsManagerError::FailedToProcessOldSettings {
+                source: SettingsManagerError::FailedToReadFromFile {
+                    message: "(old_file)".to_string(),
+                    from: file.1.to_owned(),
+                    source: SettingsManagerError::FailedToReadFromBuffer {
+                        source: IoError::from(err).into(),
+                    }
+                    .into(),
+                }
+                .into(),
             })?;
 
-        let parsed = toml::de::from_slice(data.as_slice()).map_err(|err| SettingsManagerError::FailedToParseInOld {
-            from: file.1.to_owned(),
-            message: err.to_string(),
+        let parsed = toml::de::from_slice(data.as_slice()).map_err(|err| SettingsManagerError::FailedToProcessOldSettings {
+            source: SettingsManagerError::FailedToReadFromFile {
+                message: "(old settings toml)".to_string(),
+                from: file.1.to_owned(),
+                source: SettingsManagerError::FailedToDeserializeFromToml { source: err.into() }.into(),
+            }
+            .into(),
         })?;
 
         let mut builder = TrackerSettingsBuilder::empty();
@@ -407,11 +448,10 @@ impl SettingsManager {
                 );
                 Ok(Some(settings))
             }
-            Err(err) => Err(SettingsManagerError::FailedToMoveOldSettingsFile {
+            Err(err) => Err(SettingsManagerError::FailedToMoveFile {
                 from: file.1,
                 to: backup,
-                kind: err.kind(),
-                message: err.to_string(),
+                source: IoError::from(err).into(),
             }),
         }
     }
@@ -421,15 +461,14 @@ impl SettingsManager {
             if path.is_dir() {
                 return Ok(());
             } else {
-                return Err(SettingsManagerError::NotDirectory { at: path });
+                return Err(SettingsManagerError::FailedToResolveDirectory { at: folder.to_owned() });
             }
         }
         match fs::create_dir(folder) {
             Ok(_) => Ok(()),
-            Err(err) => Err(SettingsManagerError::FailedToCreateConfigDirectory {
+            Err(err) => Err(SettingsManagerError::FailedToPrepareDirectory {
                 at: folder.to_owned(),
-                kind: err.kind(),
-                message: err.to_string(),
+                source: IoError::from(err).into(),
             }),
         }
     }
@@ -439,13 +478,13 @@ impl SettingsManager {
 mod tests {
     use std::env;
     use std::fs::OpenOptions;
-    use std::io::{Read, Seek, Write};
+    use std::io::Seek;
 
     use thiserror::Error;
     use uuid::Uuid;
 
     use super::SettingsManager;
-    use crate::errors::helpers::get_file_at;
+    use crate::helpers::get_file_at;
     use crate::settings::{Settings, SettingsErrored, TrackerSettings};
 
     #[test]

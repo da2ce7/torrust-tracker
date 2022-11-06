@@ -3,10 +3,10 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use crate::errors::ServiceSettingsError;
+use crate::errors::settings::ServiceSettingsError;
 use crate::http::routes;
 use crate::settings::{Service, ServiceProtocol};
-use crate::tracker::tracker::TorrentTracker;
+use crate::tracker::core::TorrentTracker;
 use crate::{check_field_is_not_empty, check_field_is_not_none};
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]

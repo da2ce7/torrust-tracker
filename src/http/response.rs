@@ -50,19 +50,19 @@ impl AnnounceResponse {
 
         let mut bytes: Vec<u8> = Vec::new();
         bytes.write_all(b"d8:intervali")?;
-        bytes.write_all(&self.interval.to_string().as_bytes())?;
+        bytes.write_all(self.interval.to_string().as_bytes())?;
         bytes.write_all(b"e12:min intervali")?;
-        bytes.write_all(&self.interval_min.to_string().as_bytes())?;
+        bytes.write_all(self.interval_min.to_string().as_bytes())?;
         bytes.write_all(b"e8:completei")?;
-        bytes.write_all(&self.complete.to_string().as_bytes())?;
+        bytes.write_all(self.complete.to_string().as_bytes())?;
         bytes.write_all(b"e10:incompletei")?;
-        bytes.write_all(&self.incomplete.to_string().as_bytes())?;
+        bytes.write_all(self.incomplete.to_string().as_bytes())?;
         bytes.write_all(b"e5:peers")?;
-        bytes.write_all(&peers_v4.len().to_string().as_bytes())?;
+        bytes.write_all(peers_v4.len().to_string().as_bytes())?;
         bytes.write_all(b":")?;
         bytes.write_all(peers_v4.as_slice())?;
         bytes.write_all(b"e6:peers6")?;
-        bytes.write_all(&peers_v6.len().to_string().as_bytes())?;
+        bytes.write_all(peers_v6.len().to_string().as_bytes())?;
         bytes.write_all(b":")?;
         bytes.write_all(peers_v6.as_slice())?;
         bytes.write_all(b"e")?;

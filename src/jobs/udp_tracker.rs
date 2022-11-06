@@ -3,7 +3,7 @@ use std::sync::Arc;
 use log::{error, info, warn};
 use tokio::task::JoinHandle;
 
-use crate::tracker::tracker::TorrentTracker;
+use crate::tracker::core::TorrentTracker;
 use crate::udp::{UdpServer, UdpServiceSettings};
 
 pub fn start_job(settings: &UdpServiceSettings, tracker: Arc<TorrentTracker>) -> JoinHandle<()> {

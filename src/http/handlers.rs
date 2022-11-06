@@ -12,11 +12,11 @@ use crate::http::{
     AnnounceRequest, AnnounceResponse, ErrorResponse, Peer, ScrapeRequest, ScrapeResponse, ScrapeResponseEntry, WebResult,
 };
 use crate::protocol::common::InfoHash;
+use crate::tracker::core::TorrentTracker;
 use crate::tracker::key::AuthKey;
 use crate::tracker::peer::TorrentPeer;
 use crate::tracker::statistics::TrackerStatisticsEvent;
 use crate::tracker::torrent::{TorrentError, TorrentStats};
-use crate::tracker::tracker::TorrentTracker;
 
 /// Authenticate InfoHash using optional AuthKey
 pub async fn authenticate(
@@ -90,7 +90,7 @@ pub async fn handle_scrape(
     let db = tracker.get_torrents().await;
 
     for info_hash in scrape_request.info_hashes.iter() {
-        let scrape_entry = match db.get(&info_hash) {
+        let scrape_entry = match db.get(info_hash) {
             Some(torrent_info) => {
                 if authenticate(info_hash, &auth_key, tracker.clone()).await.is_ok() {
                     let (seeders, completed, leechers) = torrent_info.get_stats();
@@ -114,7 +114,7 @@ pub async fn handle_scrape(
             },
         };
 
-        files.insert(info_hash.clone(), scrape_entry);
+        files.insert(*info_hash, scrape_entry);
     }
 
     // send stats event

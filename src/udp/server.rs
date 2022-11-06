@@ -7,9 +7,9 @@ use aquatic_udp_protocol::Response;
 use log::{debug, info};
 use tokio::net::UdpSocket;
 
-use crate::errors::ServiceSettingsError;
+use crate::errors::settings::ServiceSettingsError;
 use crate::settings::{Service, ServiceProtocol};
-use crate::tracker::tracker::TorrentTracker;
+use crate::tracker::core::TorrentTracker;
 use crate::udp::{handle_packet, MAX_PACKET_SIZE};
 use crate::{check_field_is_not_empty, check_field_is_not_none};
 

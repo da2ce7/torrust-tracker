@@ -1,9 +1,9 @@
+pub mod core;
 pub mod key;
 pub mod mode;
 pub mod peer;
 pub mod statistics;
 pub mod torrent;
-pub mod tracker;
 
 pub mod helpers {
     use std::net::IpAddr;
