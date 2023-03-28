@@ -16,8 +16,8 @@
 //! Duration:       1679929914.10167426
 //! ```
 //!
-//! > **NOTICE**: internally the `Duration` is a `u64` and it will
-//! [overflow in the year 2038](https://en.wikipedia.org/wiki/Year_2038_problem).
+//! > **NOTICE**: internally the `Duration` is stores it's main unit as seconds in a `u64` and it will
+//! overflow in 584.9 billion years.
 //!
 //! > **NOTICE**: the timestamp does not depend on the time zone. That gives you
 //! the ability to use the clock regardless of the underlying system time zone
@@ -227,7 +227,7 @@ pub trait StoppedTime: TimeNow {
     /// Will return `IntErrorKind` if `duration` would underflow the internal `Duration`.
     fn local_sub(duration: &Duration) -> Result<(), IntErrorKind>;
 
-    /// It resets the clock to default fixed time which is the the Unix Epoch.
+    /// It resets the clock to default fixed time that is application start time (or the unix epoch when testing).
     fn local_reset();
 }
 
