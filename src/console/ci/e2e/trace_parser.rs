@@ -1,4 +1,4 @@
-//! Utilities to parse Torrust Tracker logs.
+//! Utilities to parse Torrust Tracker traces.
 use serde::{Deserialize, Serialize};
 
 const UDP_TRACKER_PATTERN: &str = "[UDP TRACKER][INFO] Starting on: udp://";
@@ -13,13 +13,13 @@ pub struct RunningServices {
 }
 
 impl RunningServices {
-    /// It parses the tracker logs to extract the running services.
+    /// It parses the tracker traces to extract the running services.
     ///
-    /// For example, from this logs:
+    /// For example, from this traces:
     ///
     /// ```text
     /// Loading default configuration file: `./share/default/config/tracker.development.sqlite3.toml` ...
-    /// 2024-01-24T16:36:14.614898789+00:00 [torrust_tracker::bootstrap::logging][INFO] logging initialized.
+    /// 2024-01-24T16:36:14.614898789+00:00 [torrust_tracker::bootstrap::tracing][INFO] tracing initialized.
     /// 2024-01-24T16:36:14.615586025+00:00 [UDP TRACKER][INFO] Starting on: udp://0.0.0.0:6969
     /// 2024-01-24T16:36:14.615623705+00:00 [torrust_tracker::bootstrap::jobs][INFO] TLS not enabled
     /// 2024-01-24T16:36:14.615694484+00:00 [HTTP TRACKER][INFO] Starting on: http://0.0.0.0:7070
@@ -47,12 +47,12 @@ impl RunningServices {
     /// }
     /// ```
     #[must_use]
-    pub fn parse_from_logs(logs: &str) -> Self {
+    pub fn parse_from_traces(traces: &str) -> Self {
         let mut udp_trackers: Vec<String> = Vec::new();
         let mut http_trackers: Vec<String> = Vec::new();
         let mut health_checks: Vec<String> = Vec::new();
 
-        for line in logs.lines() {
+        for line in traces.lines() {
             if let Some(address) = Self::extract_address_if_matches(line, UDP_TRACKER_PATTERN) {
                 udp_trackers.push(address);
             } else if let Some(address) = Self::extract_address_if_matches(line, HTTP_TRACKER_PATTERN) {
@@ -84,12 +84,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn it_should_parse_from_logs_with_valid_logs() {
-        let logs = "\
+    fn it_should_parse_from_traces_with_valid_traces() {
+        let traces = "\
             [UDP TRACKER][INFO] Starting on: udp://0.0.0.0:8080\n\
             [HTTP TRACKER][INFO] Starting on: 0.0.0.0:9090\n\
             [HEALTH CHECK API][INFO] Starting on: 0.0.0.0:10010";
-        let running_services = RunningServices::parse_from_logs(logs);
+        let running_services = RunningServices::parse_from_traces(traces);
 
         assert_eq!(running_services.udp_trackers, vec!["127.0.0.1:8080"]);
         assert_eq!(running_services.http_trackers, vec!["127.0.0.1:9090"]);
@@ -97,9 +97,9 @@ mod tests {
     }
 
     #[test]
-    fn it_should_ignore_logs_with_no_matching_lines() {
-        let logs = "[Other Service][INFO] Starting on: 0.0.0.0:7070";
-        let running_services = RunningServices::parse_from_logs(logs);
+    fn it_should_ignore_traces_with_no_matching_lines() {
+        let traces = "[Other Service][INFO] Starting on: 0.0.0.0:7070";
+        let running_services = RunningServices::parse_from_traces(traces);
 
         assert!(running_services.udp_trackers.is_empty());
         assert!(running_services.http_trackers.is_empty());
