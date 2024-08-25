@@ -142,13 +142,8 @@ pub async fn start(config: &Configuration, tracker: Arc<core::Tracker>) -> JoinS
     }
 
     // Start Health Check API
-    let task = health_check_api::start_job(&config.health_check_api, registar.entries()).await;
-    jobs.spawn(async move {
-        match task.await {
-            Ok(()) => (),
-            Err(e) => tracing::error!(%e, "failed to shutdown health check service"),
-        }
-    });
+    let task = health_check_api::run_job(config.health_check_api, registar.entries());
+    jobs.spawn(task);
 
     jobs
 }

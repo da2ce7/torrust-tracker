@@ -1,5 +1,5 @@
 //! This module contains functions to handle signals.
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use derive_more::Display;
 use tokio::time::sleep;
@@ -70,17 +70,37 @@ pub async fn shutdown_signal_with_message(rx_halt: tokio::sync::oneshot::Receive
 }
 
 #[instrument(skip(handle, rx_halt, message))]
-pub async fn graceful_shutdown(handle: axum_server::Handle, rx_halt: tokio::sync::oneshot::Receiver<Halted>, message: String) {
+pub async fn graceful_shutdown(
+    handle: axum_server::Handle,
+    rx_halt: tokio::sync::oneshot::Receiver<Halted>,
+    message: String,
+    timeout: Duration,
+) {
     shutdown_signal_with_message(rx_halt, message).await;
 
     tracing::debug!("Sending graceful shutdown signal");
-    handle.graceful_shutdown(Some(Duration::from_secs(90)));
+    handle.graceful_shutdown(Some(timeout));
 
-    println!("!! shuting down in 90 seconds !!");
+    let now = Instant::now();
 
-    loop {
-        sleep(Duration::from_secs(1)).await;
+    if handle.connection_count() == 0 {
+        tracing::debug!("no active connections... shutting down");
+    } else {
+        loop {
+            if handle.connection_count() == 0 {
+                tracing::debug!("no more connections... shutting down");
+                break;
+            }
 
-        tracing::info!("remaining alive connections: {}", handle.connection_count());
+            if now.elapsed() > timeout {
+                tracing::warn!(remaining_alive_connections= %handle.connection_count(), "timed out... shutting down");
+                break;
+            }
+            tracing::info!(remaining_alive_connections= %handle.connection_count(), elapsed= ?now.elapsed(), "waiting...");
+
+            sleep(Duration::from_secs(1)).await;
+        }
     }
+
+    handle.shutdown();
 }

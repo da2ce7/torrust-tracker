@@ -26,7 +26,6 @@ use crate::servers::udp::server::Server;
 /// It will panic if it is unable to start the UDP service.
 /// It will panic if the task did not finish successfully.
 #[must_use]
-#[allow(clippy::async_yields_async)]
 #[instrument(skip(config, tracker, form))]
 pub async fn run_job(config: UdpTracker, tracker: Arc<core::Tracker>, form: ServiceRegistrationForm) {
     let stopped = Server::new(Spawner::new(config.bind_address));

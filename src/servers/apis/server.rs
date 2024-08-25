@@ -25,6 +25,7 @@
 /// shutdown the server, etc.
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum_server::tls_rustls::RustlsConfig;
 use axum_server::Handle;
@@ -146,11 +147,11 @@ impl ApiServer<Stopped> {
 
         let api_server = match rx_start.await {
             Ok(started) => {
-                form.send(ServiceRegistration::new(started.address, check_fn))
+                form.send(ServiceRegistration::new(started.local_addr, check_fn))
                     .expect("it should be able to send service registration");
 
                 ApiServer {
-                    state: Running::new(started.address, tx_halt, task),
+                    state: Running::new(started.local_addr, tx_halt, task),
                 }
             }
             Err(err) => {
@@ -253,6 +254,7 @@ impl Launcher {
             handle.clone(),
             rx_halt,
             format!("Shutting down tracker API server on socket address: {address}"),
+            Duration::from_secs(90),
         ));
 
         let tls = self.tls.clone();
@@ -282,7 +284,7 @@ impl Launcher {
         tracing::info!(target: API_LOG_TARGET, "{STARTED_ON} {protocol}://{}", address);
 
         tx_start
-            .send(Started { address })
+            .send(Started { local_addr: address })
             .expect("the HTTP(s) Tracker API service should not be dropped");
 
         running

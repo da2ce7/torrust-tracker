@@ -70,7 +70,7 @@ impl Launcher {
         };
 
         tx_start
-            .send(Started { address })
+            .send(Started { local_addr: address })
             .expect("the UDP Tracker service should not be dropped");
 
         tracing::debug!(target: UDP_TRACKER_LOG_TARGET, local_udp_url, "Udp::run_with_graceful_shutdown (started)");
