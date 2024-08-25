@@ -103,6 +103,7 @@
         "nextest",
         "nocapture",
         "nologin",
+        "nonblocking",
         "nonroot",
         "Norberg",
         "numwant",

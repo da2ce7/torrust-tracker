@@ -13,7 +13,6 @@ pub mod launcher;
 pub mod processor;
 pub mod receiver;
 pub mod request_buffer;
-pub mod spawner;
 pub mod states;
 
 /// Error that can occur when starting or stopping the UDP server.
@@ -62,7 +61,6 @@ mod tests {
 
     use torrust_tracker_test_helpers::configuration::ephemeral_public;
 
-    use super::spawner::Spawner;
     use super::Server;
     use crate::bootstrap::app::initialize_with_configuration;
     use crate::servers::registar::Registar;
@@ -76,16 +74,19 @@ mod tests {
         let bind_to = config.bind_address;
         let register = &Registar::default();
 
-        let stopped = Server::new(Spawner::new(bind_to));
+        let stopped = Server::new(bind_to);
 
-        let mut started = stopped.start(tracker, register.give_form()).await;
+        let mut started = stopped
+            .start(tracker, register.give_form())
+            .await
+            .expect("it should start the server");
 
         let () = started.stop().expect("it should send the stop signal");
         let stopped = started.await.expect("it should successfully stop");
 
         tokio::time::sleep(Duration::from_secs(1)).await;
 
-        assert_eq!(stopped.state.spawner.bind_to, bind_to);
+        assert_eq!(stopped.state.bind_to, bind_to);
     }
 
     #[tokio::test]
@@ -96,9 +97,12 @@ mod tests {
         let bind_to = config.bind_address;
         let register = &Registar::default();
 
-        let stopped = Server::new(Spawner::new(bind_to));
+        let stopped = Server::new(bind_to);
 
-        let mut started = stopped.start(tracker, register.give_form()).await;
+        let mut started = stopped
+            .start(tracker, register.give_form())
+            .await
+            .expect("it should start the server");
 
         tokio::time::sleep(Duration::from_secs(1)).await;
 
@@ -107,7 +111,7 @@ mod tests {
 
         tokio::time::sleep(Duration::from_secs(1)).await;
 
-        assert_eq!(stopped.state.spawner.bind_to, bind_to);
+        assert_eq!(stopped.state.bind_to, bind_to);
     }
 }
 

@@ -32,10 +32,8 @@ use crate::shared::bit_torrent::common::MAX_SCRAPE_TORRENTS;
 /// - Delegating the request to the correct handler depending on the request type.
 ///
 /// It will return an `Error` response if the request is invalid.
-#[instrument(skip(udp_request, tracker, local_addr), ret(level = Level::TRACE))]
+#[instrument(skip(tracker, local_addr))]
 pub(crate) async fn handle_packet(udp_request: RawRequest, tracker: &Tracker, local_addr: SocketAddr) -> Response {
-    tracing::debug!("Handling Packets: {udp_request:?}");
-
     let start_time = Instant::now();
 
     let request_id = RequestId::make(&udp_request);
@@ -90,8 +88,6 @@ pub(crate) async fn handle_packet(udp_request: RawRequest, tracker: &Tracker, lo
 /// If a error happens in the `handle_request` function, it will just return the  `ServerError`.
 #[instrument(skip(request, remote_addr, tracker))]
 pub async fn handle_request(request: Request, remote_addr: SocketAddr, tracker: &Tracker) -> Result<Response, Error> {
-    tracing::trace!("handle request");
-
     match request {
         Request::Connect(connect_request) => handle_connect(remote_addr, &connect_request, tracker).await,
         Request::Announce(announce_request) => handle_announce(remote_addr, &announce_request, tracker).await,
@@ -105,10 +101,8 @@ pub async fn handle_request(request: Request, remote_addr: SocketAddr, tracker: 
 /// # Errors
 ///
 /// This function does not ever return an error.
-#[instrument(skip(tracker), err, ret(level = Level::TRACE))]
+#[instrument(skip(tracker), err, ret(level = Level::DEBUG))]
 pub async fn handle_connect(remote_addr: SocketAddr, request: &ConnectRequest, tracker: &Tracker) -> Result<Response, Error> {
-    tracing::trace!("handle connect");
-
     let connection_cookie = make(&remote_addr);
     let connection_id = into_connection_id(&connection_cookie);
 
@@ -136,14 +130,12 @@ pub async fn handle_connect(remote_addr: SocketAddr, request: &ConnectRequest, t
 /// # Errors
 ///
 /// If a error happens in the `handle_announce` function, it will just return the  `ServerError`.
-#[instrument(skip(tracker), err, ret(level = Level::TRACE))]
+#[instrument(skip(tracker), err, ret(level = Level::DEBUG))]
 pub async fn handle_announce(
     remote_addr: SocketAddr,
     announce_request: &AnnounceRequest,
     tracker: &Tracker,
 ) -> Result<Response, Error> {
-    tracing::trace!("handle announce");
-
     // Authentication
     if tracker.requires_authentication() {
         return Err(Error::TrackerAuthenticationRequired {
@@ -234,10 +226,8 @@ pub async fn handle_announce(
 /// # Errors
 ///
 /// This function does not ever return an error.
-#[instrument(skip(tracker), err, ret(level = Level::TRACE))]
+#[instrument(skip(tracker), err, ret(level = Level::DEBUG))]
 pub async fn handle_scrape(remote_addr: SocketAddr, request: &ScrapeRequest, tracker: &Tracker) -> Result<Response, Error> {
-    tracing::trace!("handle scrape");
-
     // Convert from aquatic infohashes
     let mut info_hashes: Vec<InfoHash> = vec![];
     for info_hash in &request.info_hashes {

@@ -24,8 +24,8 @@ impl Receiver {
         }
     }
 
-    pub fn bound_socket_address(&self) -> SocketAddr {
-        self.socket.address()
+    pub fn local_addr(&self) -> SocketAddr {
+        self.socket.local_addr()
     }
 }
 

@@ -22,14 +22,12 @@ impl Processor {
     #[instrument(skip(self, request))]
     pub async fn process_request(self, request: RawRequest) {
         let from = request.from;
-        let response = handlers::handle_packet(request, &self.tracker, self.socket.address()).await;
+        let response = handlers::handle_packet(request, &self.tracker, self.socket.local_addr()).await;
         self.send_response(from, response).await;
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip(self, response))]
     async fn send_response(self, target: SocketAddr, response: Response) {
-        tracing::debug!("send response");
-
         let response_type = match &response {
             Response::Connect(_) => "Connect".to_string(),
             Response::AnnounceIpv4(_) => "AnnounceIpv4".to_string(),
@@ -42,18 +40,20 @@ impl Processor {
 
         match response.write_bytes(&mut writer) {
             Ok(()) => {
-                let bytes_count = writer.get_ref().len();
+                let total = writer.get_ref().len();
                 let payload = writer.get_ref();
 
                 let () = match self.send_packet(&target, payload).await {
-                    Ok(sent_bytes) => {
-                        if tracing::event_enabled!(Level::TRACE) {
-                            tracing::debug!(%bytes_count, %sent_bytes, ?payload, "sent {response_type}");
+                    Ok(sent) => {
+                        if sent != total {
+                            tracing::warn!(%total, %sent, ?payload, "Sent Incomplete {response_type} Response");
+                        } else if tracing::event_enabled!(Level::TRACE) {
+                            tracing::debug!(%total, %sent, ?payload, "Sent {response_type} Response");
                         } else {
-                            tracing::debug!(%bytes_count, %sent_bytes, "sent {response_type}");
+                            tracing::debug!(%total, %sent, "Sent {response_type} Response");
                         }
                     }
-                    Err(error) => tracing::warn!(%bytes_count, %error, ?payload, "failed to send"),
+                    Err(error) => tracing::warn!(%total, %error, ?payload, "failed to send"),
                 };
             }
             Err(e) => {
@@ -64,8 +64,6 @@ impl Processor {
 
     #[instrument(skip(self))]
     async fn send_packet(&self, target: &SocketAddr, payload: &[u8]) -> std::io::Result<usize> {
-        tracing::trace!("send packet");
-
         // doesn't matter if it reaches or not
         self.socket.send_to(payload, target).await
     }

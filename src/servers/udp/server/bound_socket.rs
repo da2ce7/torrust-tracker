@@ -15,16 +15,14 @@ impl BoundSocket {
     /// # Errors
     ///
     /// Will return an error if the socket can't be bound the the provided address.
-    pub async fn new(addr: SocketAddr) -> Result<Self, Box<std::io::Error>> {
+    pub fn new(addr: SocketAddr) -> std::io::Result<Self> {
         let bind_addr = format!("udp://{addr}");
         tracing::debug!(target: UDP_TRACKER_LOG_TARGET, bind_addr, "UdpSocket::new (binding)");
 
-        let socket = tokio::net::UdpSocket::bind(addr).await;
+        let socket = std::net::UdpSocket::bind(addr)?;
+        let () = socket.set_nonblocking(true)?;
 
-        let socket = match socket {
-            Ok(socket) => socket,
-            Err(e) => Err(e)?,
-        };
+        let socket = tokio::net::UdpSocket::from_std(socket)?;
 
         let local_addr = format!("udp://{}", socket.local_addr()?);
         tracing::debug!(target: UDP_TRACKER_LOG_TARGET, local_addr, "UdpSocket::new (bound)");
@@ -36,7 +34,7 @@ impl BoundSocket {
     ///
     /// Will panic if the socket can't get the address it was bound to.
     #[must_use]
-    pub fn address(&self) -> SocketAddr {
+    pub fn local_addr(&self) -> SocketAddr {
         self.socket.local_addr().expect("it should get local address")
     }
 
@@ -46,7 +44,7 @@ impl BoundSocket {
     /// to be used in a URL.
     #[must_use]
     pub fn url(&self) -> Url {
-        Url::parse(&format!("udp://{}", self.address())).expect("UDP socket address should be valid")
+        Url::parse(&format!("udp://{}", self.local_addr())).expect("UDP socket address should be valid")
     }
 }
 

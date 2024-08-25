@@ -83,7 +83,7 @@ mod receiving_a_connection_request {
     #[tokio::test]
     async fn should_return_a_connect_response() {
         INIT.call_once(|| {
-            tracing_stderr_init(LevelFilter::ERROR);
+            tracing_stderr_init(LevelFilter::TRACE);
         });
 
         let env = Started::new(&configuration::ephemeral().into()).await;
