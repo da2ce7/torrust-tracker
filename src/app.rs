@@ -23,7 +23,7 @@
 //! - Tracker REST API: the tracker API can be enabled/disabled.
 use std::sync::Arc;
 
-use tokio::task::JoinHandle;
+use tokio::task::JoinSet;
 use torrust_tracker_configuration::Configuration;
 use tracing::instrument;
 
@@ -38,7 +38,7 @@ use crate::{core, servers};
 /// - Can't retrieve tracker keys from database.
 /// - Can't load whitelist from database.
 #[instrument(skip(config, tracker))]
-pub async fn start(config: &Configuration, tracker: Arc<core::Tracker>) -> Vec<JoinHandle<()>> {
+pub async fn start(config: &Configuration, tracker: Arc<core::Tracker>) -> JoinSet<()> {
     if config.http_api.is_none()
         && (config.udp_trackers.is_none() || config.udp_trackers.as_ref().map_or(true, std::vec::Vec::is_empty))
         && (config.http_trackers.is_none() || config.http_trackers.as_ref().map_or(true, std::vec::Vec::is_empty))
@@ -46,7 +46,7 @@ pub async fn start(config: &Configuration, tracker: Arc<core::Tracker>) -> Vec<J
         tracing::warn!("No services enabled in configuration");
     }
 
-    let mut jobs: Vec<JoinHandle<()>> = Vec::new();
+    let mut jobs = JoinSet::new();
 
     let registar = Registar::default();
 
@@ -75,7 +75,11 @@ pub async fn start(config: &Configuration, tracker: Arc<core::Tracker>) -> Vec<J
                     udp_tracker_config.bind_address
                 );
             } else {
-                jobs.push(udp_tracker::start_job(udp_tracker_config, tracker.clone(), registar.give_form()).await);
+                jobs.spawn(udp_tracker::run_job(
+                    *udp_tracker_config,
+                    tracker.clone(),
+                    registar.give_form(),
+                ));
             }
         }
     } else {
@@ -93,7 +97,12 @@ pub async fn start(config: &Configuration, tracker: Arc<core::Tracker>) -> Vec<J
             )
             .await
             {
-                jobs.push(job);
+                jobs.spawn(async move {
+                    match job.await {
+                        Ok(()) => (),
+                        Err(e) => tracing::error!(%e, "failed to shutdown http service"),
+                    }
+                });
             };
         }
     } else {
@@ -110,7 +119,12 @@ pub async fn start(config: &Configuration, tracker: Arc<core::Tracker>) -> Vec<J
         )
         .await
         {
-            jobs.push(job);
+            jobs.spawn(async move {
+                match job.await {
+                    Ok(()) => (),
+                    Err(e) => tracing::error!(%e, "failed to shutdown http api service"),
+                }
+            });
         };
     } else {
         tracing::info!("No API block in configuration");
@@ -118,11 +132,23 @@ pub async fn start(config: &Configuration, tracker: Arc<core::Tracker>) -> Vec<J
 
     // Start runners to remove torrents without peers, every interval
     if config.core.inactive_peer_cleanup_interval > 0 {
-        jobs.push(torrent_cleanup::start_job(&config.core, &tracker));
+        let task = torrent_cleanup::start_job(&config.core, &tracker);
+        jobs.spawn(async move {
+            match task.await {
+                Ok(()) => (),
+                Err(e) => tracing::error!(%e, "failed to shutdown cleanup service"),
+            }
+        });
     }
 
     // Start Health Check API
-    jobs.push(health_check_api::start_job(&config.health_check_api, registar.entries()).await);
+    let task = health_check_api::start_job(&config.health_check_api, registar.entries()).await;
+    jobs.spawn(async move {
+        match task.await {
+            Ok(()) => (),
+            Err(e) => tracing::error!(%e, "failed to shutdown health check service"),
+        }
+    });
 
     jobs
 }

@@ -3,8 +3,10 @@ use std::fmt::Debug;
 
 use derive_more::derive::Display;
 use thiserror::Error;
+use tokio::task::JoinError;
 
 use super::RawRequest;
+use crate::servers::signals::Halted;
 
 pub mod bound_socket;
 pub mod launcher;
@@ -26,11 +28,12 @@ pub mod states;
 /// - The [`Server`] cannot send the shutdown signal to the spawned UDP service thread.
 #[derive(Debug, Error)]
 pub enum UdpError {
-    #[error("Any error to do with the socket")]
-    FailedToBindSocket(std::io::Error),
-
-    #[error("Any error to do with starting or stopping the sever")]
-    FailedToStartOrStopServer(String),
+    #[error("Failed to join to service")]
+    Join(#[from] JoinError),
+    #[error("Already tried to stop service")]
+    AlreadyStopping,
+    #[error("Failed to send halt signal")]
+    FailedToSendStop(Halted),
 }
 
 /// A UDP server.
@@ -75,12 +78,10 @@ mod tests {
 
         let stopped = Server::new(Spawner::new(bind_to));
 
-        let started = stopped
-            .start(tracker, register.give_form())
-            .await
-            .expect("it should start the server");
+        let mut started = stopped.start(tracker, register.give_form()).await;
 
-        let stopped = started.stop().await.expect("it should stop the server");
+        let () = started.stop().expect("it should send the stop signal");
+        let stopped = started.await.expect("it should successfully stop");
 
         tokio::time::sleep(Duration::from_secs(1)).await;
 
@@ -97,14 +98,12 @@ mod tests {
 
         let stopped = Server::new(Spawner::new(bind_to));
 
-        let started = stopped
-            .start(tracker, register.give_form())
-            .await
-            .expect("it should start the server");
+        let mut started = stopped.start(tracker, register.give_form()).await;
 
         tokio::time::sleep(Duration::from_secs(1)).await;
 
-        let stopped = started.stop().await.expect("it should stop the server");
+        let () = started.stop().expect("it should send the stop signal");
+        let stopped = started.await.expect("it should successfully stop");
 
         tokio::time::sleep(Duration::from_secs(1)).await;
 

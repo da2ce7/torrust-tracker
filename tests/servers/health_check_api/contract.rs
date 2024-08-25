@@ -326,13 +326,14 @@ mod udp {
 
         let configuration = Arc::new(configuration::ephemeral());
 
-        let service = udp::Started::new(&configuration).await;
+        let mut service = udp::Started::new(&configuration).await;
 
         let binding = service.bind_address();
 
         let registar = service.registar.clone();
 
-        service.server.stop().await.expect("it should stop udp server");
+        service.server.stop().expect("it should send the shutdown signal");
+        service.server.await.expect("it should shutdown cleanly");
 
         {
             let config = configuration.health_check_api.clone();
