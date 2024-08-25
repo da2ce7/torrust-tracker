@@ -56,7 +56,6 @@ pub async fn run_job(config: HealthCheckApi, register: ServiceRegistry) {
     };
 
     // Wait until the server sends the started message
-
     let local_addr = match rx_start.await {
         Ok(started) => started.local_addr,
         Err(e) => panic!("the Health Check API server was dropped: {e}"),

@@ -63,7 +63,7 @@ impl Launcher {
 
         let running = {
             let local_addr = local_udp_url.clone();
-            tokio::task::spawn(async move {
+            tokio::spawn(async move {
                 tracing::debug!(target: UDP_TRACKER_LOG_TARGET, local_addr, "Udp::run_with_graceful_shutdown::task (listening...)");
                 let () = Self::run_udp_server_main(receiver, tracker.clone()).await;
             })
@@ -77,7 +77,7 @@ impl Launcher {
 
         let stop = running.abort_handle();
 
-        let halt_task = tokio::task::spawn(shutdown_signal_with_message(
+        let halt_task = tokio::spawn(shutdown_signal_with_message(
             rx_halt,
             format!("Halting UDP Service Bound to Socket: {address}"),
         ));
@@ -141,7 +141,7 @@ impl Launcher {
                 // are only adding and removing tasks without given them the
                 // chance to finish. However, the buffer is yielding before
                 // aborting one tasks, giving it the chance to finish.
-                let abort_handle: tokio::task::AbortHandle = tokio::task::spawn(processor.process_request(req)).abort_handle();
+                let abort_handle: tokio::task::AbortHandle = tokio::spawn(processor.process_request(req)).abort_handle();
 
                 if abort_handle.is_finished() {
                     continue;
