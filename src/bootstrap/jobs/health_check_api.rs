@@ -43,22 +43,12 @@ pub async fn start_job(config: &HealthCheckApi, register: ServiceRegistry) -> Jo
     let (tx_start, rx_start) = oneshot::channel::<Started>();
     let (tx_halt, rx_halt) = tokio::sync::oneshot::channel::<Halted>();
 
-    let protocol = "http";
-
     // Run the API server
-    let join_handle = tokio::spawn(async move {
-        tracing::info!(target: HEALTH_CHECK_API_LOG_TARGET, "Starting on: {protocol}://{}", bind_addr);
-
-        let handle = server::start(bind_addr, tx_start, rx_halt, register);
-
-        if let Ok(()) = handle.await {
-            tracing::info!(target: HEALTH_CHECK_API_LOG_TARGET, "Stopped server running on: {protocol}://{}", bind_addr);
-        }
-    });
+    let join_handle = tokio::spawn(run_job(bind_addr, tx_start, rx_halt, register));
 
     // Wait until the server sends the started message
     match rx_start.await {
-        Ok(msg) => tracing::info!(target: HEALTH_CHECK_API_LOG_TARGET, "{STARTED_ON}: {protocol}://{}", msg.address),
+        Ok(msg) => tracing::info!(target: HEALTH_CHECK_API_LOG_TARGET, "{STARTED_ON}: http://{}", msg.address),
         Err(e) => panic!("the Health Check API server was dropped: {e}"),
     }
 
@@ -70,4 +60,19 @@ pub async fn start_job(config: &HealthCheckApi, register: ServiceRegistry) -> Jo
             .await
             .expect("it should be able to join to the Health Check API server task");
     })
+}
+
+async fn run_job(
+    bind_addr: std::net::SocketAddr,
+    tx_start: oneshot::Sender<Started>,
+    rx_halt: oneshot::Receiver<Halted>,
+    register: ServiceRegistry,
+) {
+    tracing::info!(target: HEALTH_CHECK_API_LOG_TARGET, "Starting on: http://{}", bind_addr);
+
+    let handle = server::start(bind_addr, tx_start, rx_halt, register);
+
+    if let Ok(()) = handle.await {
+        tracing::info!(target: HEALTH_CHECK_API_LOG_TARGET, "Stopped server running on: http:://{}", bind_addr);
+    }
 }

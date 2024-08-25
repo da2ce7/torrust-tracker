@@ -163,6 +163,11 @@ use tokio::time::sleep;
 
 use crate::{app, bootstrap};
 
+enum Run {
+    Complete,
+    Interrupted,
+}
+
 pub async fn run() {
     // Parse command line arguments
     let args: Vec<String> = env::args().collect();
@@ -181,19 +186,24 @@ pub async fn run() {
 
     let (config, tracker) = bootstrap::app::setup();
 
-    let jobs = app::start(&config, tracker).await;
+    let mut jobs = app::start(&config, tracker).await;
 
     // Run the tracker for a fixed duration
     let run_duration = sleep(Duration::from_secs(duration_secs));
 
-    tokio::select! {
-        () = run_duration => {
+    let run = tokio::select! {
+        () = run_duration => Run::Complete,
+        _ = tokio::signal::ctrl_c() => Run::Interrupted,
+    };
+
+    match run {
+        Run::Complete => {
             tracing::info!("Torrust timed shutdown..");
-        },
-        _ = tokio::signal::ctrl_c() => {
+        }
+        Run::Interrupted => {
             tracing::info!("Torrust shutting down via Ctrl+C ...");
             // Await for all jobs to shutdown
-            futures::future::join_all(jobs).await;
+            while jobs.join_next().await.is_some() {}
         }
     }
 

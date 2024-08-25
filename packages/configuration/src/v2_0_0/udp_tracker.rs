@@ -2,7 +2,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Copy)]
 pub struct UdpTracker {
     /// The address the tracker will bind to.
     /// The format is `ip:port`, for example `0.0.0.0:6969`. If you want to

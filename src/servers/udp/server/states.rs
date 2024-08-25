@@ -1,10 +1,11 @@
 use std::fmt::Debug;
+use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
 use derive_more::derive::Display;
 use derive_more::Constructor;
-use tokio::task::JoinHandle;
+use tokio::task::JoinSet;
 use tracing::{instrument, Level};
 
 use super::spawner::Spawner;
@@ -37,8 +38,8 @@ pub struct Stopped {
 pub struct Running {
     /// The address where the server is bound.
     pub local_addr: SocketAddr,
-    pub halt_task: tokio::sync::oneshot::Sender<Halted>,
-    pub task: JoinHandle<Spawner>,
+    pub halt_task: Option<tokio::sync::oneshot::Sender<Halted>>,
+    pub task: JoinSet<Spawner>,
 }
 
 impl Server<Stopped> {
@@ -61,15 +62,17 @@ impl Server<Stopped> {
     ///
     /// It panics if unable to receive the bound socket address from service.
     ///
-    #[instrument(skip(self, tracker, form), err, ret(Display, level = Level::INFO))]
-    pub async fn start(self, tracker: Arc<Tracker>, form: ServiceRegistrationForm) -> Result<Server<Running>, std::io::Error> {
+    #[allow(clippy::async_yields_async)]
+    #[instrument(skip(self, tracker, form), ret(Display, level = Level::INFO))]
+    pub async fn start(self, tracker: Arc<Tracker>, form: ServiceRegistrationForm) -> Server<Running> {
         let (tx_start, rx_start) = tokio::sync::oneshot::channel::<Started>();
         let (tx_halt, rx_halt) = tokio::sync::oneshot::channel::<Halted>();
 
         assert!(!tx_halt.is_closed(), "Halt channel for UDP tracker should be open");
 
-        // May need to wrap in a task to about a tokio bug.
-        let task = self.state.spawner.spawn_launcher(tracker, tx_start, rx_halt);
+        let mut task = JoinSet::new();
+
+        let _abort_handle = self.state.spawner.spawn_launcher(tracker, tx_start, rx_halt, &mut task);
 
         let local_addr = rx_start.await.expect("it should be able to start the service").address;
 
@@ -79,7 +82,7 @@ impl Server<Stopped> {
         let running_udp_server: Server<Running> = Server {
             state: Running {
                 local_addr,
-                halt_task: tx_halt,
+                halt_task: Some(tx_halt),
                 task,
             },
         };
@@ -87,7 +90,7 @@ impl Server<Stopped> {
         let local_addr = format!("udp://{local_addr}");
         tracing::trace!(target: UDP_TRACKER_LOG_TARGET, local_addr, "UdpServer<Stopped>::start (running)");
 
-        Ok(running_udp_server)
+        running_udp_server
     }
 }
 
@@ -97,25 +100,43 @@ impl Server<Running> {
     ///     
     /// # Errors
     ///
-    /// Will return `Err` if the oneshot channel to send the stop signal
+    /// Will return [`UdpError::AlreadyStopping`] if the oneshot channel to send the stop signal
     /// has already been called once.
     ///
     /// # Panics
     ///
     /// It panics if unable to shutdown service.
-    #[instrument(skip(self), err, ret(Display, level = Level::INFO))]
-    pub async fn stop(self) -> Result<Server<Stopped>, UdpError> {
+    #[instrument(skip(self), err)]
+    pub fn stop(&mut self) -> Result<(), UdpError> {
         self.state
             .halt_task
+            .take()
+            .ok_or(UdpError::AlreadyStopping)?
             .send(Halted::Normal)
-            .map_err(|e| UdpError::FailedToStartOrStopServer(e.to_string()))?;
+            .map_err(UdpError::FailedToSendStop)
+    }
+}
 
-        let launcher = self.state.task.await.expect("it should shutdown service");
+impl Future for Server<Running> {
+    type Output = Result<Server<Stopped>, UdpError>;
 
-        let stopped_api_server: Server<Stopped> = Server {
-            state: Stopped { spawner: launcher },
+    fn poll(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
+        let spawner = match self.state.task.poll_join_next(cx) {
+            std::task::Poll::Ready(Some(Ok(spawner))) => spawner,
+            std::task::Poll::Ready(Some(Err(e))) => return std::task::Poll::Ready(Err(e.into())),
+            std::task::Poll::Ready(None) => panic!("it should not be polled once finished"),
+            std::task::Poll::Pending => return std::task::Poll::Pending,
         };
 
-        Ok(stopped_api_server)
+        match self.state.task.poll_join_next(cx) {
+            std::task::Poll::Ready(None) => {}
+            _ => unreachable!("it should only have a single task"),
+        };
+
+        let stopped_api_server: Server<Stopped> = Server {
+            state: Stopped { spawner },
+        };
+
+        std::task::Poll::Ready(Ok(stopped_api_server))
     }
 }

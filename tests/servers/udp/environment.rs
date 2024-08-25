@@ -39,7 +39,7 @@ impl Environment<Stopped> {
 
         let udp_tracker = configuration.udp_trackers.clone().expect("missing UDP tracker configuration");
 
-        let config = Arc::new(udp_tracker[0].clone());
+        let config = Arc::new(udp_tracker[0]);
 
         let bind_to = config.bind_address;
 
@@ -59,7 +59,7 @@ impl Environment<Stopped> {
             config: self.config,
             tracker: self.tracker.clone(),
             registar: self.registar.clone(),
-            server: self.server.start(self.tracker, self.registar.give_form()).await.unwrap(),
+            server: self.server.start(self.tracker, self.registar.give_form()).await,
         }
     }
 }
@@ -72,16 +72,19 @@ impl Environment<Running> {
     }
 
     #[allow(dead_code)]
-    pub async fn stop(self) -> Environment<Stopped> {
-        let stopped = tokio::time::timeout(DEFAULT_TIMEOUT, self.server.stop())
+    pub async fn stop(mut self) -> Environment<Stopped> {
+        self.server.stop().expect("it should send the shutdown signal");
+
+        let stopped = tokio::time::timeout(DEFAULT_TIMEOUT, self.server)
             .await
-            .expect("it should stop the environment within the timeout");
+            .expect("it should stop the environment within the timeout")
+            .expect("it should shutdown cleanly");
 
         Environment {
             config: self.config,
             tracker: self.tracker,
             registar: Registar::default(),
-            server: stopped.expect("it stop the udp tracker service"),
+            server: stopped,
         }
     }
 
