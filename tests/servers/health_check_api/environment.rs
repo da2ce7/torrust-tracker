@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use tokio::sync::oneshot::{self, Sender};
+use tokio::sync::oneshot;
 use tokio::task::JoinSet;
 use torrust_tracker::bootstrap::jobs::Started;
 use torrust_tracker::servers::health_check_api::{server, HEALTH_CHECK_API_LOG_TARGET};
@@ -18,7 +18,7 @@ pub enum Error {
 
 pub struct Running {
     pub local_addr: SocketAddr,
-    pub halt_task: Sender<signals::Halted>,
+    pub halt_task: oneshot::Sender<signals::Halted>,
     pub tasks: JoinSet<Result<(), std::io::Error>>,
     pub bind_to: SocketAddr,
 }

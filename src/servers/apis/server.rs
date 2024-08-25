@@ -33,7 +33,7 @@ use derive_more::derive::Display;
 use derive_more::Constructor;
 use futures::future::BoxFuture;
 use thiserror::Error;
-use tokio::sync::oneshot::{Receiver, Sender};
+use tokio::sync::oneshot;
 use torrust_tracker_configuration::AccessTokens;
 use tracing::{instrument, Level};
 
@@ -241,8 +241,8 @@ impl Launcher {
         &self,
         tracker: Arc<Tracker>,
         access_tokens: Arc<AccessTokens>,
-        tx_start: Sender<Started>,
-        rx_halt: Receiver<Halted>,
+        tx_start: oneshot::Sender<Started>,
+        rx_halt: oneshot::Receiver<Halted>,
     ) -> BoxFuture<'static, ()> {
         let router = router(tracker, access_tokens);
         let socket = std::net::TcpListener::bind(self.bind_to).expect("Could not bind tcp_listener to address.");
