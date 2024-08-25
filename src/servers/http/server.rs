@@ -7,7 +7,7 @@ use axum_server::tls_rustls::RustlsConfig;
 use axum_server::Handle;
 use derive_more::Constructor;
 use futures::future::BoxFuture;
-use tokio::sync::oneshot::{Receiver, Sender};
+use tokio::sync::oneshot;
 use tracing::instrument;
 
 use super::v1::routes::router;
@@ -44,7 +44,12 @@ pub struct Launcher {
 
 impl Launcher {
     #[instrument(skip(self, tracker, tx_start, rx_halt))]
-    fn start(&self, tracker: Arc<Tracker>, tx_start: Sender<Started>, rx_halt: Receiver<Halted>) -> BoxFuture<'static, ()> {
+    fn start(
+        &self,
+        tracker: Arc<Tracker>,
+        tx_start: oneshot::Sender<Started>,
+        rx_halt: oneshot::Receiver<Halted>,
+    ) -> BoxFuture<'static, ()> {
         let socket = std::net::TcpListener::bind(self.bind_to).expect("Could not bind tcp_listener to address.");
         let address = socket.local_addr().expect("Could not get local_addr from tcp_listener.");
 
