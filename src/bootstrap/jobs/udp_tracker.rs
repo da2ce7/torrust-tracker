@@ -13,7 +13,6 @@ use tracing::instrument;
 
 use crate::core;
 use crate::servers::registar::ServiceRegistrationForm;
-use crate::servers::udp::server::spawner::Spawner;
 use crate::servers::udp::server::Server;
 
 /// It starts a new UDP server with the provided configuration.
@@ -28,11 +27,17 @@ use crate::servers::udp::server::Server;
 #[must_use]
 #[instrument(skip(config, tracker, form))]
 pub async fn run_job(config: UdpTracker, tracker: Arc<core::Tracker>, form: ServiceRegistrationForm) {
-    let stopped = Server::new(Spawner::new(config.bind_address));
+    let stopped = Server::new(config.bind_address);
 
-    let started = stopped.start(tracker, form).await;
+    let running = match stopped.start(tracker, form).await {
+        Ok(running) => running,
+        Err(e) => {
+            tracing::error!(%e, "failed to start service");
+            panic!("failed to start service")
+        }
+    };
 
-    match started.await {
+    match running.await {
         Ok(_stopped) => (),
         Err(e) => {
             tracing::error!(%e, "failed to cleanly stop service");

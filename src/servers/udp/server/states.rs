@@ -8,12 +8,12 @@ use derive_more::Constructor;
 use tokio::task::JoinSet;
 use tracing::{instrument, Level};
 
-use super::spawner::Spawner;
 use super::{Server, UdpError};
 use crate::bootstrap::jobs::Started;
 use crate::core::Tracker;
 use crate::servers::registar::{ServiceRegistration, ServiceRegistrationForm};
 use crate::servers::signals::Halted;
+use crate::servers::udp::server::bound_socket::BoundSocket;
 use crate::servers::udp::server::launcher::Launcher;
 use crate::servers::udp::UDP_TRACKER_LOG_TARGET;
 
@@ -27,9 +27,9 @@ pub type RunningUdpServer = Server<Running>;
 
 /// A stopped UDP server state.
 #[derive(Debug, Display)]
-#[display("Stopped: {spawner}")]
+#[display("Stopped: {bind_to}")]
 pub struct Stopped {
-    pub spawner: Spawner,
+    pub bind_to: SocketAddr,
 }
 
 /// A running UDP server state.
@@ -39,15 +39,15 @@ pub struct Running {
     /// The address where the server is bound.
     pub local_addr: SocketAddr,
     pub halt_task: Option<tokio::sync::oneshot::Sender<Halted>>,
-    pub task: JoinSet<Spawner>,
+    pub task: JoinSet<Server<Stopped>>,
 }
 
 impl Server<Stopped> {
     /// Creates a new `UdpServer` instance in `stopped`state.
     #[must_use]
-    pub fn new(spawner: Spawner) -> Self {
+    pub fn new(bind_to: SocketAddr) -> Self {
         Self {
-            state: Stopped { spawner },
+            state: Stopped { bind_to },
         }
     }
 
@@ -62,17 +62,22 @@ impl Server<Stopped> {
     ///
     /// It panics if unable to receive the bound socket address from service.
     ///
-    #[allow(clippy::async_yields_async)]
-    #[instrument(skip(self, tracker, form), ret(Display, level = Level::INFO))]
-    pub async fn start(self, tracker: Arc<Tracker>, form: ServiceRegistrationForm) -> Server<Running> {
+    #[instrument(skip(self, tracker, form), err, ret(Display, level = Level::INFO))]
+    pub async fn start(self, tracker: Arc<Tracker>, form: ServiceRegistrationForm) -> std::io::Result<Server<Running>> {
         let (tx_start, rx_start) = tokio::sync::oneshot::channel::<Started>();
         let (tx_halt, rx_halt) = tokio::sync::oneshot::channel::<Halted>();
+        let mut task = JoinSet::new();
 
         assert!(!tx_halt.is_closed(), "Halt channel for UDP tracker should be open");
 
-        let mut task = JoinSet::new();
+        tracing::info!(bind_to= %self.state.bind_to, "starting");
 
-        let _abort_handle = self.state.spawner.spawn_launcher(tracker, tx_start, rx_halt, &mut task);
+        let socket = BoundSocket::new(self.state.bind_to)?;
+
+        task.spawn(async move {
+            Launcher::run_with_graceful_shutdown(tracker, socket, tx_start, rx_halt).await;
+            self
+        });
 
         let local_addr = rx_start.await.expect("it should be able to start the service").local_addr;
 
@@ -90,7 +95,7 @@ impl Server<Stopped> {
         let local_addr = format!("udp://{local_addr}");
         tracing::trace!(target: UDP_TRACKER_LOG_TARGET, local_addr, "UdpServer<Stopped>::start (running)");
 
-        running_udp_server
+        Ok(running_udp_server)
     }
 }
 
@@ -121,7 +126,7 @@ impl Future for Server<Running> {
     type Output = Result<Server<Stopped>, UdpError>;
 
     fn poll(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
-        let spawner = match self.state.task.poll_join_next(cx) {
+        let stopped = match self.state.task.poll_join_next(cx) {
             std::task::Poll::Ready(Some(Ok(spawner))) => spawner,
             std::task::Poll::Ready(Some(Err(e))) => return std::task::Poll::Ready(Err(e.into())),
             std::task::Poll::Ready(None) => panic!("it should not be polled once finished"),
@@ -133,10 +138,6 @@ impl Future for Server<Running> {
             _ => unreachable!("it should only have a single task"),
         };
 
-        let stopped_api_server: Server<Stopped> = Server {
-            state: Stopped { spawner },
-        };
-
-        std::task::Poll::Ready(Ok(stopped_api_server))
+        std::task::Poll::Ready(Ok(stopped))
     }
 }

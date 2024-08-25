@@ -22,7 +22,7 @@ impl Processor {
     #[instrument(skip(self, request))]
     pub async fn process_request(self, request: RawRequest) {
         let from = request.from;
-        let response = handlers::handle_packet(request, &self.tracker, self.socket.address()).await;
+        let response = handlers::handle_packet(request, &self.tracker, self.socket.local_addr()).await;
         self.send_response(from, response).await;
     }
 

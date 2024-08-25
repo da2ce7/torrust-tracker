@@ -1,6 +1,5 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Duration;
 
 use derive_more::Constructor;
 use futures_util::StreamExt;
@@ -8,13 +7,13 @@ use tokio::select;
 use tokio::sync::oneshot;
 use tracing::instrument;
 
+use super::bound_socket::BoundSocket;
 use super::request_buffer::ActiveRequests;
 use crate::bootstrap::jobs::Started;
 use crate::core::Tracker;
 use crate::servers::logging::STARTED_ON;
 use crate::servers::registar::ServiceHealthCheckJob;
 use crate::servers::signals::{shutdown_signal_with_message, Halted};
-use crate::servers::udp::server::bound_socket::BoundSocket;
 use crate::servers::udp::server::processor::Processor;
 use crate::servers::udp::server::receiver::Receiver;
 use crate::servers::udp::UDP_TRACKER_LOG_TARGET;
@@ -31,33 +30,19 @@ impl Launcher {
     ///
     /// It panics if unable to bind to udp socket, and get the address from the udp socket.
     /// It also panics if unable to send address of socket.
-    #[instrument(skip(tracker, bind_to, tx_start, rx_halt))]
+    #[instrument(skip(tracker, tx_start, rx_halt))]
     pub async fn run_with_graceful_shutdown(
         tracker: Arc<Tracker>,
-        bind_to: SocketAddr,
+        socket: BoundSocket,
         tx_start: oneshot::Sender<Started>,
         rx_halt: oneshot::Receiver<Halted>,
     ) {
-        tracing::info!(target: UDP_TRACKER_LOG_TARGET, "Starting on: {bind_to}");
-
-        let socket = tokio::time::timeout(Duration::from_millis(5000), BoundSocket::new(bind_to))
-            .await
-            .expect("it should bind to the socket within five seconds");
-
-        let bound_socket = match socket {
-            Ok(socket) => socket,
-            Err(e) => {
-                tracing::error!(target: UDP_TRACKER_LOG_TARGET, addr = %bind_to, err = %e, "Udp::run_with_graceful_shutdown panic! (error when building socket)" );
-                panic!("could not bind to socket!");
-            }
-        };
-
-        let address = bound_socket.address();
-        let local_udp_url = bound_socket.url().to_string();
+        let address = socket.local_addr();
+        let local_udp_url = socket.url().to_string();
 
         tracing::info!(target: UDP_TRACKER_LOG_TARGET, "{STARTED_ON}: {local_udp_url}");
 
-        let receiver = Receiver::new(bound_socket.into());
+        let receiver = Receiver::new(socket.into());
 
         tracing::trace!(target: UDP_TRACKER_LOG_TARGET, local_udp_url, "Udp::run_with_graceful_shutdown (spawning main loop)");
 
@@ -106,8 +91,7 @@ impl Launcher {
     async fn run_udp_server_main(mut receiver: Receiver, tracker: Arc<Tracker>) {
         let active_requests = &mut ActiveRequests::default();
 
-        let addr = receiver.bound_socket_address();
-        let local_addr = format!("udp://{addr}");
+        let local_addr = format!("udp://{}", receiver.local_addr());
 
         loop {
             let processor = Processor::new(receiver.socket.clone(), tracker.clone());
