@@ -17,7 +17,7 @@ pub mod udp_tracker;
 ///
 #[derive(Debug)]
 pub struct Started {
-    pub address: std::net::SocketAddr,
+    pub local_addr: std::net::SocketAddr,
 }
 
 #[instrument(skip(opt_tsl_config))]

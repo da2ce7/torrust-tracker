@@ -74,7 +74,7 @@ impl Server<Stopped> {
 
         let _abort_handle = self.state.spawner.spawn_launcher(tracker, tx_start, rx_halt, &mut task);
 
-        let local_addr = rx_start.await.expect("it should be able to start the service").address;
+        let local_addr = rx_start.await.expect("it should be able to start the service").local_addr;
 
         form.send(ServiceRegistration::new(local_addr, Launcher::check))
             .expect("it should be able to send service registration");

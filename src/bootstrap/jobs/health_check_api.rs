@@ -15,7 +15,7 @@
 //! for the API configuration options.
 
 use tokio::sync::oneshot;
-use tokio::task::JoinHandle;
+use tokio::task::JoinSet;
 use torrust_tracker_configuration::HealthCheckApi;
 use tracing::instrument;
 
@@ -35,44 +35,50 @@ use crate::servers::signals::Halted;
 /// # Panics
 ///
 /// It would panic if unable to send the  `ApiServerJobStarted` notice.
-#[allow(clippy::async_yields_async)]
 #[instrument(skip(config, register))]
-pub async fn start_job(config: &HealthCheckApi, register: ServiceRegistry) -> JoinHandle<()> {
+pub async fn run_job(config: HealthCheckApi, register: ServiceRegistry) {
     let bind_addr = config.bind_address;
 
     let (tx_start, rx_start) = oneshot::channel::<Started>();
     let (tx_halt, rx_halt) = tokio::sync::oneshot::channel::<Halted>();
 
-    // Run the API server
-    let join_handle = tokio::spawn(run_job(bind_addr, tx_start, rx_halt, register));
-
-    // Wait until the server sends the started message
-    match rx_start.await {
-        Ok(msg) => tracing::info!(target: HEALTH_CHECK_API_LOG_TARGET, "{STARTED_ON}: http://{}", msg.address),
-        Err(e) => panic!("the Health Check API server was dropped: {e}"),
-    }
-
-    // Wait until the server finishes
-    tokio::spawn(async move {
-        assert!(!tx_halt.is_closed(), "Halt channel for Health Check API should be open");
-
-        join_handle
-            .await
-            .expect("it should be able to join to the Health Check API server task");
-    })
-}
-
-async fn run_job(
-    bind_addr: std::net::SocketAddr,
-    tx_start: oneshot::Sender<Started>,
-    rx_halt: oneshot::Receiver<Halted>,
-    register: ServiceRegistry,
-) {
     tracing::info!(target: HEALTH_CHECK_API_LOG_TARGET, "Starting on: http://{}", bind_addr);
 
-    let handle = server::start(bind_addr, tx_start, rx_halt, register);
+    let mut tasks = JoinSet::new();
 
-    if let Ok(()) = handle.await {
-        tracing::info!(target: HEALTH_CHECK_API_LOG_TARGET, "Stopped server running on: http:://{}", bind_addr);
+    // Run the API server
+    let () = match server::start(bind_addr, tx_start, rx_halt, register, &mut tasks) {
+        Ok(()) => (),
+        Err(e) => {
+            tracing::error!(%e, "failed to start service");
+            panic!("failed to start health check api service")
+        }
+    };
+
+    // Wait until the server sends the started message
+
+    let local_addr = match rx_start.await {
+        Ok(started) => started.local_addr,
+        Err(e) => panic!("the Health Check API server was dropped: {e}"),
+    };
+
+    tracing::info!(target: HEALTH_CHECK_API_LOG_TARGET, "{STARTED_ON}: http://{local_addr}");
+
+    assert!(!tx_halt.is_closed(), "Halt channel for Health Check API should be open");
+
+    while let Some(task) = tasks.join_next().await {
+        match task {
+            Ok(Ok(())) => (),
+            Ok(Err(e)) => {
+                tracing::error!(%e, %local_addr, "task flailed with error");
+                panic!("task flailed with error")
+            }
+            Err(e) => {
+                tracing::error!(%e, %local_addr, "failed to cleanly join task");
+                panic!("failed to cleanly join task")
+            }
+        }
     }
+
+    tracing::info!(target: HEALTH_CHECK_API_LOG_TARGET, "Stopped server running on: http:://{local_addr}");
 }

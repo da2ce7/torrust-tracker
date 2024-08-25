@@ -2,12 +2,13 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use tokio::sync::oneshot::{self, Sender};
-use tokio::task::JoinHandle;
+use tokio::task::JoinSet;
 use torrust_tracker::bootstrap::jobs::Started;
 use torrust_tracker::servers::health_check_api::{server, HEALTH_CHECK_API_LOG_TARGET};
 use torrust_tracker::servers::registar::Registar;
 use torrust_tracker::servers::signals::{self, Halted};
 use torrust_tracker_configuration::HealthCheckApi;
+use tracing::instrument;
 
 #[derive(Debug)]
 pub enum Error {
@@ -16,9 +17,10 @@ pub enum Error {
 }
 
 pub struct Running {
-    pub binding: SocketAddr,
+    pub local_addr: SocketAddr,
     pub halt_task: Sender<signals::Halted>,
-    pub task: JoinHandle<SocketAddr>,
+    pub tasks: JoinSet<Result<(), std::io::Error>>,
+    pub bind_to: SocketAddr,
 }
 
 pub struct Stopped {
@@ -42,36 +44,32 @@ impl Environment<Stopped> {
 
     /// Start the test environment for the Health Check API.
     /// It runs the API server.
+    #[instrument(skip(self))]
     pub async fn start(self) -> Environment<Running> {
         let (tx_start, rx_start) = oneshot::channel::<Started>();
         let (tx_halt, rx_halt) = tokio::sync::oneshot::channel::<Halted>();
 
         let register = self.registar.entries();
+        let bind_to = self.state.bind_to;
 
-        tracing::debug!(target: HEALTH_CHECK_API_LOG_TARGET, "Spawning task to launch the service ...");
+        let mut tasks = JoinSet::new();
+        server::start(bind_to, tx_start, rx_halt, register, &mut tasks).expect("it should start the health check service");
 
-        let server = tokio::spawn(async move {
-            tracing::debug!(target: HEALTH_CHECK_API_LOG_TARGET, "Starting the server in a spawned task ...");
-
-            server::start(self.state.bind_to, tx_start, rx_halt, register)
-                .await
-                .expect("it should start the health check service");
-
-            tracing::debug!(target: HEALTH_CHECK_API_LOG_TARGET, "Server started. Sending the binding {} ...", self.state.bind_to);
-
-            self.state.bind_to
-        });
+        tracing::debug!(target: HEALTH_CHECK_API_LOG_TARGET, "Server started. Sending the binding {bind_to} ...");
 
         tracing::debug!(target: HEALTH_CHECK_API_LOG_TARGET, "Waiting for spawning task to send the binding ...");
 
-        let binding = rx_start.await.expect("it should send service binding").address;
+        let local_addr = rx_start.await.expect("it should send service binding").local_addr;
+
+        tracing::info!(%local_addr, "started");
 
         Environment {
             registar: self.registar.clone(),
             state: Running {
-                task: server,
+                tasks,
                 halt_task: tx_halt,
-                binding,
+                local_addr,
+                bind_to,
             },
         }
     }
@@ -82,17 +80,31 @@ impl Environment<Running> {
         Environment::<Stopped>::new(config, registar).start().await
     }
 
-    pub async fn stop(self) -> Result<Environment<Stopped>, Error> {
+    pub async fn stop(mut self) -> Result<Environment<Stopped>, Error> {
         self.state
             .halt_task
             .send(Halted::Normal)
             .map_err(|e| Error::Error(e.to_string()))?;
 
-        let bind_to = self.state.task.await.expect("it should shutdown the service");
+        while let Some(task) = self.state.tasks.join_next().await {
+            match task {
+                Ok(Ok(())) => (),
+                Ok(Err(e)) => {
+                    tracing::error!(%e, "task flailed with error");
+                    panic!("task flailed with error")
+                }
+                Err(e) => {
+                    tracing::error!(%e, "failed to cleanly join task");
+                    panic!("failed to cleanly join task")
+                }
+            }
+        }
 
         Ok(Environment {
             registar: self.registar.clone(),
-            state: Stopped { bind_to },
+            state: Stopped {
+                bind_to: self.state.bind_to,
+            },
         })
     }
 }

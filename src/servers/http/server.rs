@@ -1,6 +1,7 @@
 //! Module to handle the HTTP server instances.
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum_server::tls_rustls::RustlsConfig;
 use axum_server::Handle;
@@ -53,6 +54,7 @@ impl Launcher {
             handle.clone(),
             rx_halt,
             format!("Shutting down HTTP server on socket address: {address}"),
+            Duration::from_secs(90),
         ));
 
         let tls = self.tls.clone();
@@ -84,7 +86,7 @@ impl Launcher {
         tracing::info!(target: HTTP_TRACKER_LOG_TARGET, "{STARTED_ON}: {protocol}://{}", address);
 
         tx_start
-            .send(Started { address })
+            .send(Started { local_addr: address })
             .expect("the HTTP(s) Tracker service should not be dropped");
 
         running
@@ -167,7 +169,7 @@ impl HttpServer<Stopped> {
             launcher
         });
 
-        let binding = rx_start.await.expect("it should be able to start the service").address;
+        let binding = rx_start.await.expect("it should be able to start the service").local_addr;
 
         form.send(ServiceRegistration::new(binding, check_fn))
             .expect("it should be able to send service registration");

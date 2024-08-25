@@ -17,7 +17,7 @@ async fn health_check_endpoint_should_return_status_ok_when_there_is_no_services
 
     let env = Started::new(&configuration.health_check_api.into(), Registar::default()).await;
 
-    let response = get(&format!("http://{}/health_check", env.state.binding)).await;
+    let response = get(&format!("http://{}/health_check", env.state.local_addr)).await;
 
     assert_eq!(response.status(), 200);
     assert_eq!(response.headers().get("content-type").unwrap(), "application/json");
@@ -57,10 +57,10 @@ mod api {
         let registar = service.registar.clone();
 
         {
-            let config = configuration.health_check_api.clone();
+            let config = configuration.health_check_api;
             let env = Started::new(&config.into(), registar).await;
 
-            let response = get(&format!("http://{}/health_check", env.state.binding)).await;
+            let response = get(&format!("http://{}/health_check", env.state.local_addr)).await;
 
             assert_eq!(response.status(), 200);
             assert_eq!(response.headers().get("content-type").unwrap(), "application/json");
@@ -110,10 +110,10 @@ mod api {
         service.server.stop().await.expect("it should stop udp server");
 
         {
-            let config = configuration.health_check_api.clone();
+            let config = configuration.health_check_api;
             let env = Started::new(&config.into(), registar).await;
 
-            let response = get(&format!("http://{}/health_check", env.state.binding)).await;
+            let response = get(&format!("http://{}/health_check", env.state.local_addr)).await;
 
             assert_eq!(response.status(), 200);
             assert_eq!(response.headers().get("content-type").unwrap(), "application/json");
@@ -172,10 +172,10 @@ mod http {
         let registar = service.registar.clone();
 
         {
-            let config = configuration.health_check_api.clone();
+            let config = configuration.health_check_api;
             let env = Started::new(&config.into(), registar).await;
 
-            let response = get(&format!("http://{}/health_check", env.state.binding)).await;
+            let response = get(&format!("http://{}/health_check", env.state.local_addr)).await;
 
             assert_eq!(response.status(), 200);
             assert_eq!(response.headers().get("content-type").unwrap(), "application/json");
@@ -224,10 +224,10 @@ mod http {
         service.server.stop().await.expect("it should stop udp server");
 
         {
-            let config = configuration.health_check_api.clone();
+            let config = configuration.health_check_api;
             let env = Started::new(&config.into(), registar).await;
 
-            let response = get(&format!("http://{}/health_check", env.state.binding)).await;
+            let response = get(&format!("http://{}/health_check", env.state.local_addr)).await;
 
             assert_eq!(response.status(), 200);
             assert_eq!(response.headers().get("content-type").unwrap(), "application/json");
@@ -286,10 +286,10 @@ mod udp {
         let registar = service.registar.clone();
 
         {
-            let config = configuration.health_check_api.clone();
+            let config = configuration.health_check_api;
             let env = Started::new(&config.into(), registar).await;
 
-            let response = get(&format!("http://{}/health_check", env.state.binding)).await;
+            let response = get(&format!("http://{}/health_check", env.state.local_addr)).await;
 
             assert_eq!(response.status(), 200);
             assert_eq!(response.headers().get("content-type").unwrap(), "application/json");
@@ -336,10 +336,10 @@ mod udp {
         service.server.await.expect("it should shutdown cleanly");
 
         {
-            let config = configuration.health_check_api.clone();
+            let config = configuration.health_check_api;
             let env = Started::new(&config.into(), registar).await;
 
-            let response = get(&format!("http://{}/health_check", env.state.binding)).await;
+            let response = get(&format!("http://{}/health_check", env.state.local_addr)).await;
 
             assert_eq!(response.status(), 200);
             assert_eq!(response.headers().get("content-type").unwrap(), "application/json");

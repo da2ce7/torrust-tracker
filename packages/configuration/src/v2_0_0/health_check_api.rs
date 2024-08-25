@@ -5,7 +5,7 @@ use serde_with::serde_as;
 
 /// Configuration for the Health Check API.
 #[serde_as]
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Copy)]
 pub struct HealthCheckApi {
     /// The address the API will bind to.
     /// The format is `ip:port`, for example `127.0.0.1:1313`. If you want to
