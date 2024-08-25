@@ -250,7 +250,7 @@ impl Launcher {
 
         let handle = Handle::new();
 
-        tokio::task::spawn(graceful_shutdown(
+        tokio::spawn(graceful_shutdown(
             handle.clone(),
             rx_halt,
             format!("Shutting down tracker API server on socket address: {address}"),
