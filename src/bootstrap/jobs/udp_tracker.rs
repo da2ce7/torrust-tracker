@@ -38,7 +38,7 @@ pub async fn run_job(config: UdpTracker, tracker: Arc<core::Tracker>, form: Serv
     };
 
     match running.await {
-        Ok(_stopped) => (),
+        Ok(stopped) => tracing::error!(%stopped, "running server has stopped"),
         Err(e) => {
             tracing::error!(%e, "failed to cleanly stop service");
             panic!("failed to cleanly stop service")

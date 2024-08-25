@@ -125,7 +125,12 @@ impl Launcher {
                 // are only adding and removing tasks without given them the
                 // chance to finish. However, the buffer is yielding before
                 // aborting one tasks, giving it the chance to finish.
-                let abort_handle: tokio::task::AbortHandle = tokio::spawn(processor.process_request(req)).abort_handle();
+
+                let abort_handle: tokio::task::AbortHandle = tokio::spawn(async move {
+                    tracing::trace!(?req, "processing...");
+                    processor.process_request(req).await;
+                })
+                .abort_handle();
 
                 if abort_handle.is_finished() {
                     continue;

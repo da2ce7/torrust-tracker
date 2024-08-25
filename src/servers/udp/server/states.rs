@@ -141,3 +141,10 @@ impl Future for Server<Running> {
         std::task::Poll::Ready(Ok(stopped))
     }
 }
+
+impl Drop for Running {
+    #[instrument(fields(%self))]
+    fn drop(&mut self) {
+        tracing::trace!("dropped");
+    }
+}
