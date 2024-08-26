@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{mpsc, Arc};
 
+use derive_more::derive::Display;
 use derive_more::Constructor;
 use futures::FutureExt as _;
 use futures_util::StreamExt;
@@ -20,9 +21,32 @@ use crate::servers::udp::server::receiver::Receiver;
 use crate::servers::udp::UDP_TRACKER_LOG_TARGET;
 use crate::shared::bit_torrent::tracker::udp::client::check;
 
+#[derive(Debug, Display)]
+pub enum Finished {
+    #[display("Main Task")]
+    Main(()),
+    #[display("Shutdown Task")]
+    Shutdown(()),
+}
+
 /// A UDP server instance launcher.
-#[derive(Constructor)]
-pub struct Launcher;
+#[derive(Constructor, Clone)]
+pub struct Launcher {
+    tracker: Arc<Tracker>,
+    pub bind_to: SocketAddr,
+}
+
+impl std::fmt::Debug for Launcher {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Launcher").field("tracker", &"..").finish()
+    }
+}
+
+impl std::fmt::Display for Launcher {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("Launcher binding to: {}", self.bind_to))
+    }
+}
 
 impl Launcher {
     /// It starts the UDP server instance with graceful shutdown.
@@ -31,17 +55,15 @@ impl Launcher {
     ///
     /// It panics if unable to bind to udp socket, and get the address from the udp socket.
     /// It also panics if unable to send address of socket.
-    #[instrument(skip(tracker, tx_start, rx_halt))]
-    pub async fn run_with_graceful_shutdown(
-        tracker: Arc<Tracker>,
-        socket: BoundSocket,
-        tx_start: oneshot::Sender<Started>,
+    #[instrument(skip(tx_start, rx_halt))]
+    pub fn start_with_graceful_shutdown(
+        &self,
+        tx_start: mpsc::SyncSender<Started>,
         rx_halt: oneshot::Receiver<Halted>,
-    ) {
-        enum Finished {
-            Main(()),
-            Shutdown(()),
-        }
+    ) -> std::io::Result<JoinSet<Finished>> {
+        tracing::info!(bind_to= %self.bind_to, "starting");
+
+        let socket = BoundSocket::new(self.bind_to)?;
 
         let local_addr = socket.local_addr();
         let local_udp_url = socket.url().to_string();
@@ -53,11 +75,14 @@ impl Launcher {
         tracing::trace!(target: UDP_TRACKER_LOG_TARGET, local_udp_url, "Udp::run_with_graceful_shutdown (spawning main loop)");
 
         let mut tasks = JoinSet::new();
-        tasks.spawn(Self::run_udp_server_main(receiver, tracker.clone()).map(Finished::Main));
+        tasks.spawn(Self::run_udp_server_main(receiver, self.tracker.clone()).map(Finished::Main));
 
-        tx_start
-            .send(Started { local_addr })
-            .expect("the UDP Tracker service should not be dropped");
+        let () = tx_start.send(Started { local_addr }).map_err(|msg| {
+            std::io::Error::new(
+                std::io::ErrorKind::BrokenPipe,
+                format!("failed to send start message: {msg:?}"),
+            )
+        })?;
 
         tracing::debug!(target: UDP_TRACKER_LOG_TARGET, local_udp_url, "Udp::run_with_graceful_shutdown (started)");
 
@@ -66,20 +91,7 @@ impl Launcher {
                 .map(Finished::Shutdown),
         );
 
-        let Some(finished) = tasks.join_next().await else {
-            unreachable!("it should have at least one task");
-        };
-
-        let () = match finished {
-            Ok(Finished::Main(())) => tracing::warn!("main task unexpectedly exited!"),
-            Ok(Finished::Shutdown(())) => tracing::debug!("shutting down"),
-            Err(e) => {
-                tracing::error!(%e, "failed to join task");
-                panic!("failed to join task");
-            }
-        };
-
-        tasks.shutdown().await;
+        Ok(tasks)
     }
 
     #[must_use]

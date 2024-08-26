@@ -1,20 +1,17 @@
 use std::fmt::Debug;
 use std::future::Future;
 use std::net::SocketAddr;
-use std::sync::Arc;
 
 use derive_more::derive::Display;
 use derive_more::Constructor;
-use tokio::task::JoinSet;
+use tokio::task::{JoinError, JoinSet};
 use tracing::{instrument, Level};
 
 use super::{Server, UdpError};
 use crate::bootstrap::jobs::Started;
-use crate::core::Tracker;
 use crate::servers::registar::{ServiceRegistration, ServiceRegistrationForm};
 use crate::servers::signals::Halted;
-use crate::servers::udp::server::bound_socket::BoundSocket;
-use crate::servers::udp::server::launcher::Launcher;
+use crate::servers::udp::server::launcher::{Finished, Launcher};
 use crate::servers::udp::UDP_TRACKER_LOG_TARGET;
 
 /// A UDP server instance controller with no UDP instance running.
@@ -25,11 +22,28 @@ pub type StoppedUdpServer = Server<Stopped>;
 #[allow(clippy::module_name_repetitions)]
 pub type RunningUdpServer = Server<Running>;
 
+#[derive(Debug)]
+enum Tasks {
+    Active(JoinSet<Finished>),
+    Shutdown(JoinSet<Finished>),
+}
+
+impl Tasks {
+    fn make_shutdown(&mut self) {
+        let active = match std::mem::replace(self, Tasks::Shutdown(JoinSet::new())) {
+            Tasks::Active(active) => active,
+            Tasks::Shutdown(_) => panic!("should only be used on active to shutdown"),
+        };
+
+        *self = Tasks::Shutdown(active);
+    }
+}
+
 /// A stopped UDP server state.
 #[derive(Debug, Display)]
-#[display("Stopped: {bind_to}")]
+#[display("Stopped: {launcher}")]
 pub struct Stopped {
-    pub bind_to: SocketAddr,
+    pub launcher: Launcher,
 }
 
 /// A running UDP server state.
@@ -39,15 +53,16 @@ pub struct Running {
     /// The address where the server is bound.
     pub local_addr: SocketAddr,
     pub halt_task: Option<tokio::sync::oneshot::Sender<Halted>>,
-    pub task: JoinSet<Server<Stopped>>,
+    tasks: Tasks,
+    pub launcher: Launcher,
 }
 
 impl Server<Stopped> {
     /// Creates a new `UdpServer` instance in `stopped`state.
     #[must_use]
-    pub fn new(bind_to: SocketAddr) -> Self {
+    pub fn new(launcher: Launcher) -> Self {
         Self {
-            state: Stopped { bind_to },
+            state: Stopped { launcher },
         }
     }
 
@@ -62,38 +77,35 @@ impl Server<Stopped> {
     ///
     /// It panics if unable to receive the bound socket address from service.
     ///
-    #[instrument(skip(self, tracker, form), err, ret(Display, level = Level::INFO))]
-    pub async fn start(self, tracker: Arc<Tracker>, form: ServiceRegistrationForm) -> std::io::Result<Server<Running>> {
-        let (tx_start, rx_start) = tokio::sync::oneshot::channel::<Started>();
+    #[instrument(skip(self,  form), err, ret(Display, level = Level::INFO))]
+    pub fn start(self, form: ServiceRegistrationForm) -> Result<Server<Running>, UdpError> {
+        let (tx_start, rx_start) = std::sync::mpsc::sync_channel::<Started>(0);
         let (tx_halt, rx_halt) = tokio::sync::oneshot::channel::<Halted>();
-        let mut task = JoinSet::new();
 
         assert!(!tx_halt.is_closed(), "Halt channel for UDP tracker should be open");
 
-        tracing::info!(bind_to= %self.state.bind_to, "starting");
+        let tasks = self
+            .state
+            .launcher
+            .start_with_graceful_shutdown(tx_start, rx_halt)
+            .map_err(UdpError::FailedToStart)?;
 
-        let socket = BoundSocket::new(self.state.bind_to)?;
+        let local_addr = rx_start.recv().map_err(UdpError::FailedToReceiveStartedMessage)?.local_addr;
 
-        task.spawn(async move {
-            Launcher::run_with_graceful_shutdown(tracker, socket, tx_start, rx_halt).await;
-            self
-        });
-
-        let local_addr = rx_start.await.expect("it should be able to start the service").local_addr;
+        let local_addr_url = format!("udp://{local_addr}");
+        tracing::trace!(target: UDP_TRACKER_LOG_TARGET, local_addr_url, "UdpServer<Stopped>::start (running)");
 
         form.send(ServiceRegistration::new(local_addr, Launcher::check))
-            .expect("it should be able to send service registration");
+            .map_err(UdpError::FailedToRegisterService)?;
 
         let running_udp_server: Server<Running> = Server {
             state: Running {
                 local_addr,
                 halt_task: Some(tx_halt),
-                task,
+                tasks: Tasks::Active(tasks),
+                launcher: self.state.launcher,
             },
         };
-
-        let local_addr = format!("udp://{local_addr}");
-        tracing::trace!(target: UDP_TRACKER_LOG_TARGET, local_addr, "UdpServer<Stopped>::start (running)");
 
         Ok(running_udp_server)
     }
@@ -123,22 +135,53 @@ impl Server<Running> {
 }
 
 impl Future for Server<Running> {
-    type Output = Result<Server<Stopped>, UdpError>;
+    type Output = Result<Server<Stopped>, JoinError>;
 
     fn poll(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
-        let stopped = match self.state.task.poll_join_next(cx) {
-            std::task::Poll::Ready(Some(Ok(spawner))) => spawner,
-            std::task::Poll::Ready(Some(Err(e))) => return std::task::Poll::Ready(Err(e.into())),
-            std::task::Poll::Ready(None) => panic!("it should not be polled once finished"),
-            std::task::Poll::Pending => return std::task::Poll::Pending,
+        let () = match &mut self.state.tasks {
+            Tasks::Active(ref mut active) => {
+                // lets poll until one of the active tasks finishes...
+
+                let () = match active.poll_join_next(cx) {
+                    std::task::Poll::Pending => return std::task::Poll::Pending,
+                    std::task::Poll::Ready(None) => panic!("it should have at least a single task"),
+
+                    std::task::Poll::Ready(Some(Err(e))) => return std::task::Poll::Ready(Err(e)),
+
+                    std::task::Poll::Ready(Some(Ok(Finished::Main(())))) => tracing::warn!("main task unexpectedly exited!"),
+                    std::task::Poll::Ready(Some(Ok(Finished::Shutdown(())))) => tracing::debug!("shutting down"),
+                };
+
+                active.abort_all();
+            }
+            Tasks::Shutdown(ref mut shutdown) => {
+                // lets clean up the tasks for shutdown...
+
+                let () = match shutdown.poll_join_next(cx) {
+                    std::task::Poll::Pending => return std::task::Poll::Pending,
+
+                    std::task::Poll::Ready(Some(Ok(finished))) => {
+                        tracing::trace!(%finished, "task finished when shutting down");
+                        cx.waker().wake_by_ref();
+                        return std::task::Poll::Pending;
+                    }
+
+                    std::task::Poll::Ready(Some(Err(e))) => {
+                        tracing::warn!(%e, "task failed to join successfully when shutting down");
+                        cx.waker().wake_by_ref();
+                        return std::task::Poll::Pending;
+                    }
+                    std::task::Poll::Ready(None) => {
+                        tracing::debug!("finished cleaning up tasks...");
+                        return std::task::Poll::Ready(Ok(Server::new(self.state.launcher.clone())));
+                    }
+                };
+            }
         };
 
-        match self.state.task.poll_join_next(cx) {
-            std::task::Poll::Ready(None) => {}
-            _ => unreachable!("it should only have a single task"),
-        };
-
-        std::task::Poll::Ready(Ok(stopped))
+        self.state.tasks.make_shutdown();
+        cx.waker().wake_by_ref();
+        std::task::Poll::Pending
     }
 }
 

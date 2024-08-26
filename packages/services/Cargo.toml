@@ -1,0 +1,18 @@
+[package]
+description = "A library for the management of unit services states life cycles"
+keywords = ["service", "library", "state management"]
+name = "torrust-tracker-services"
+readme = "README.md"
+
+authors.workspace = true
+documentation.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+futures = "0"

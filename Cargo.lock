@@ -4039,6 +4039,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "torrust-tracker-services"
+version = "3.0.0-beta-develop"
+dependencies = [
+ "futures",
+]
+
+[[package]]
 name = "torrust-tracker-test-helpers"
 version = "3.0.0-beta-develop"
 dependencies = [

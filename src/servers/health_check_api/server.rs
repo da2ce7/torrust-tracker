@@ -30,8 +30,8 @@ pub fn start(
     tx_start: oneshot::Sender<Started>,
     rx_halt: oneshot::Receiver<Halted>,
     register: ServiceRegistry,
-    tasks: &mut JoinSet<Result<(), std::io::Error>>,
-) -> Result<(), std::io::Error> {
+    tasks: &mut JoinSet<std::io::Result<()>>,
+) -> std::io::Result<()> {
     let socket = std::net::TcpListener::bind(bind_to)?;
     let local_addr = socket.local_addr()?;
 

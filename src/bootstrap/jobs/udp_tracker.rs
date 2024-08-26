@@ -8,11 +8,17 @@
 //! > for the configuration options.
 use std::sync::Arc;
 
+use futures::future::BoxFuture;
+use futures::{FutureExt, TryFutureExt};
+use tokio::sync::oneshot;
+use tokio::task::JoinError;
 use torrust_tracker_configuration::UdpTracker;
 use tracing::instrument;
 
 use crate::core;
 use crate::servers::registar::ServiceRegistrationForm;
+use crate::servers::signals::Halted;
+use crate::servers::udp::server::launcher::Launcher;
 use crate::servers::udp::server::Server;
 
 /// It starts a new UDP server with the provided configuration.
@@ -26,10 +32,14 @@ use crate::servers::udp::server::Server;
 /// It will panic if the task did not finish successfully.
 #[must_use]
 #[instrument(skip(config, tracker, form))]
-pub async fn run_job(config: UdpTracker, tracker: Arc<core::Tracker>, form: ServiceRegistrationForm) {
-    let stopped = Server::new(config.bind_address);
+pub fn start_job<'a>(
+    config: UdpTracker,
+    tracker: Arc<core::Tracker>,
+    form: ServiceRegistrationForm,
+) -> (BoxFuture<'a, Result<(), JoinError>>, oneshot::Sender<Halted>) {
+    let stopped = Server::new(Launcher::new(tracker, config.bind_address));
 
-    let running = match stopped.start(tracker, form).await {
+    let mut running = match stopped.start(form) {
         Ok(running) => running,
         Err(e) => {
             tracing::error!(%e, "failed to start service");
@@ -37,11 +47,8 @@ pub async fn run_job(config: UdpTracker, tracker: Arc<core::Tracker>, form: Serv
         }
     };
 
-    match running.await {
-        Ok(stopped) => tracing::error!(%stopped, "running server has stopped"),
-        Err(e) => {
-            tracing::error!(%e, "failed to cleanly stop service");
-            panic!("failed to cleanly stop service")
-        }
-    }
+    let halt = running.state.halt_task.take().expect("it should have halt channel");
+    let fut = running.map_ok(|_| ()).boxed();
+
+    (fut, halt)
 }

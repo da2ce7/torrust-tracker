@@ -42,7 +42,7 @@ impl Environment<Stopped> {
 
         let bind_to = config.bind_address;
 
-        let server = Server::new(bind_to);
+        let server = Server::new(Launcher::new());
 
         Self {
             config,
@@ -60,8 +60,7 @@ impl Environment<Stopped> {
             registar: self.registar.clone(),
             server: self
                 .server
-                .start(self.tracker, self.registar.give_form())
-                .await
+                .start(self.registar.give_form())
                 .expect("it should start the service"),
         }
     }

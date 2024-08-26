@@ -95,6 +95,7 @@ torrust-tracker-test-helpers = { version = "3.0.0-beta-develop", path = "package
 [workspace]
 members = [
     "contrib/bencode",
+    "packages/services",
     "packages/configuration",
     "packages/located-error",
     "packages/primitives",

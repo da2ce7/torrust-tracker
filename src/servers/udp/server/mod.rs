@@ -1,11 +1,13 @@
 //! Module to handle the UDP server instances.
 use std::fmt::Debug;
+use std::sync::mpsc;
 
 use derive_more::derive::Display;
 use thiserror::Error;
 use tokio::task::JoinError;
 
 use super::RawRequest;
+use crate::servers::registar::ServiceRegistration;
 use crate::servers::signals::Halted;
 
 pub mod bound_socket;
@@ -27,6 +29,12 @@ pub mod states;
 /// - The [`Server`] cannot send the shutdown signal to the spawned UDP service thread.
 #[derive(Debug, Error)]
 pub enum UdpError {
+    #[error("Failed to start service")]
+    FailedToStart(std::io::Error),
+    #[error("Failed to receive started message")]
+    FailedToReceiveStartedMessage(mpsc::RecvError),
+    #[error("Failed to register service")]
+    FailedToRegisterService(ServiceRegistration),
     #[error("Failed to join to service")]
     Join(#[from] JoinError),
     #[error("Already tried to stop service")]
@@ -64,6 +72,7 @@ mod tests {
     use super::Server;
     use crate::bootstrap::app::initialize_with_configuration;
     use crate::servers::registar::Registar;
+    use crate::servers::udp::server::launcher::Launcher;
 
     #[tokio::test]
     async fn it_should_be_able_to_start_and_stop() {
@@ -74,19 +83,16 @@ mod tests {
         let bind_to = config.bind_address;
         let register = &Registar::default();
 
-        let stopped = Server::new(bind_to);
+        let stopped = Server::new(Launcher::new(tracker, bind_to));
 
-        let mut started = stopped
-            .start(tracker, register.give_form())
-            .await
-            .expect("it should start the server");
+        let mut started = stopped.start(register.give_form()).expect("it should start the server");
 
         let () = started.stop().expect("it should send the stop signal");
         let stopped = started.await.expect("it should successfully stop");
 
         tokio::time::sleep(Duration::from_secs(1)).await;
 
-        assert_eq!(stopped.state.bind_to, bind_to);
+        assert_eq!(stopped.state.launcher.bind_to, bind_to);
     }
 
     #[tokio::test]
@@ -97,12 +103,9 @@ mod tests {
         let bind_to = config.bind_address;
         let register = &Registar::default();
 
-        let stopped = Server::new(bind_to);
+        let stopped = Server::new(Launcher::new(tracker, bind_to));
 
-        let mut started = stopped
-            .start(tracker, register.give_form())
-            .await
-            .expect("it should start the server");
+        let mut started = stopped.start(register.give_form()).expect("it should start the server");
 
         tokio::time::sleep(Duration::from_secs(1)).await;
 
@@ -111,7 +114,7 @@ mod tests {
 
         tokio::time::sleep(Duration::from_secs(1)).await;
 
-        assert_eq!(stopped.state.bind_to, bind_to);
+        assert_eq!(stopped.state.launcher.bind_to, bind_to);
     }
 }
 
