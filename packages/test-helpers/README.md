@@ -8,4 +8,4 @@ A library providing helpers for testing the [Torrust Tracker](https://github.com
 
 ## License
 
-The project is licensed under the terms of the [GNU AFFERO GENERAL PUBLIC LICENSE](./LICENSE).
+The project is licensed under the terms of the [GNU AFFERO GENERAL PUBLIC LICENSE](../../LICENSE).

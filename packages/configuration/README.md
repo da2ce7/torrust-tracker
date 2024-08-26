@@ -8,4 +8,4 @@ A library to provide configuration to the [Torrust Tracker](https://github.com/t
 
 ## License
 
-The project is licensed under the terms of the [GNU AFFERO GENERAL PUBLIC LICENSE](./LICENSE).
+The project is licensed under the terms of the [GNU AFFERO GENERAL PUBLIC LICENSE](../../LICENSE).
