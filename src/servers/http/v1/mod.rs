@@ -2,6 +2,7 @@
 //!
 //! Refer to the generic [HTTP server documentation](crate::servers::http) for
 //! more information about the endpoints and their usage.
+mod check;
 pub mod extractors;
 pub mod handlers;
 pub mod query;
@@ -9,3 +10,5 @@ pub mod requests;
 pub mod responses;
 pub mod routes;
 pub mod services;
+
+pub use check::HealthCheck;

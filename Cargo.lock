@@ -3970,6 +3970,7 @@ dependencies = [
  "torrust-tracker-contrib-bencode",
  "torrust-tracker-located-error",
  "torrust-tracker-primitives",
+ "torrust-tracker-services",
  "torrust-tracker-test-helpers",
  "torrust-tracker-torrent-repository",
  "tower 0.5.0",
@@ -4042,7 +4043,9 @@ dependencies = [
 name = "torrust-tracker-services"
 version = "3.0.0-beta-develop"
 dependencies = [
+ "derive_more",
  "futures",
+ "tracing",
 ]
 
 [[package]]

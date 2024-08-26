@@ -1,6 +1,6 @@
 [package]
 description = "A library for the management of unit services states life cycles"
-keywords = ["service", "library", "state management"]
+keywords = ["library", "service", "state management"]
 name = "torrust-tracker-services"
 readme = "README.md"
 
@@ -15,4 +15,6 @@ rust-version.workspace = true
 version.workspace = true
 
 [dependencies]
+derive_more = { version = "1", features = ["constructor", "deref", "deref_mut"] }
 futures = "0"
+tracing = "0"

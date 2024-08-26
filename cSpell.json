@@ -46,6 +46,7 @@
         "datetime",
         "debuginfo",
         "Deque",
+        "Deregistration",
         "Dijke",
         "distroless",
         "dockerhub",

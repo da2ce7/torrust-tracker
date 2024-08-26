@@ -10,7 +10,8 @@ async fn main() {
 
     while let Some(task) = jobs.join_next().await {
         match task {
-            Ok(()) => (),
+            Ok(Ok(())) => (),
+            Ok(Err(e)) => tracing::warn!(%e, "task did not shutdown cleanly"),
             Err(e) => tracing::warn!(%e, "task did not shutdown cleanly"),
         }
     }

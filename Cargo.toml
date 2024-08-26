@@ -74,6 +74,7 @@ torrust-tracker-configuration = { version = "3.0.0-beta-develop", path = "packag
 torrust-tracker-contrib-bencode = { version = "3.0.0-beta-develop", path = "contrib/bencode" }
 torrust-tracker-located-error = { version = "3.0.0-beta-develop", path = "packages/located-error" }
 torrust-tracker-primitives = { version = "3.0.0-beta-develop", path = "packages/primitives" }
+torrust-tracker-services = { version = "3.0.0-beta-develop", path = "packages/services" }
 torrust-tracker-torrent-repository = { version = "3.0.0-beta-develop", path = "packages/torrent-repository" }
 tower = { version = "0", features = ["timeout"] }
 tower-http = { version = "0", features = ["compression-full", "cors", "propagate-header", "request-id", "trace"] }
@@ -95,10 +96,10 @@ torrust-tracker-test-helpers = { version = "3.0.0-beta-develop", path = "package
 [workspace]
 members = [
     "contrib/bencode",
-    "packages/services",
     "packages/configuration",
     "packages/located-error",
     "packages/primitives",
+    "packages/services",
     "packages/test-helpers",
     "packages/torrent-repository",
 ]

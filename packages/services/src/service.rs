@@ -1,6 +1,11 @@
+//! Service Trait - A service that can be started and stopped.
+//!
+
 use std::error::Error;
 
 use futures::future::BoxFuture;
+
+use crate::registration::Registration;
 
 pub trait Service: Sized {
     type Launcher;
@@ -18,12 +23,13 @@ pub trait Service: Sized {
     /// # Errors
     ///
     /// This function will return an error if the services is already started or stating
-    fn start<'a>(self) -> Result<BoxFuture<'a, Result<Self, Self::Error>>, Self::Error>;
+    #[allow(clippy::type_complexity)]
+    fn start<'a>(self) -> Result<BoxFuture<'a, Result<(Self, Registration), Self::Error>>, Self::Error>;
 
     /// Moves the service into the stopping state
     ///
     /// # Errors
     ///
-    /// This function will return an error if .
+    /// This function will return an error if the services is not already started.
     fn stop<'a>(self) -> Result<BoxFuture<'a, Result<Self, Self::Error>>, Self::Error>;
 }
