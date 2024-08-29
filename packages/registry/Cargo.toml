@@ -1,7 +1,7 @@
 [package]
-description = "A library for the management of unit services states life cycles"
-keywords = ["library", "service", "state management"]
-name = "torrust-tracker-services"
+description = "A library registering services"
+keywords = ["library", "registry", "service"]
+name = "torrust-tracker-registry"
 readme = "README.md"
 
 authors.workspace = true
@@ -15,8 +15,11 @@ rust-version.workspace = true
 version.workspace = true
 
 [dependencies]
+torrust-tracker-services = { version = "3.0.0-beta-develop", path = "../services" }
+
 derive_more = { version = "1", features = ["constructor", "deref", "deref_mut"] }
 futures = "0"
-pin-project = "1"
-tracing = "0"
+pin-project-lite = "0"
 thiserror = "1"
+tokio = { version = "1", features = ["macros", "sync"] }
+tracing = "0"

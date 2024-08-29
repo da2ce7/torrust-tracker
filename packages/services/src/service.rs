@@ -1,12 +1,13 @@
 //! Service Trait - A service that can be started and stopped.
 //!
+//! This module defines the [`Service`] trait, which should be implemented by any service
+//! that wishes to be managed by this service management library.
 
 use std::error::Error;
 
 use futures::future::BoxFuture;
 
-use crate::registration::Registration;
-
+/// The `Service` trait defines the core functionality for a service that can be started and stopped.
 pub trait Service: Sized {
     type Launcher;
     type Error: Error;
@@ -24,7 +25,7 @@ pub trait Service: Sized {
     ///
     /// This function will return an error if the services is already started or stating
     #[allow(clippy::type_complexity)]
-    fn start<'a>(self) -> Result<BoxFuture<'a, Result<(Self, Registration), Self::Error>>, Self::Error>;
+    fn start<'a, Reg>(self) -> Result<BoxFuture<'a, Result<(Self, Reg), Self::Error>>, Self::Error>;
 
     /// Moves the service into the stopping state
     ///

@@ -1,74 +1,83 @@
-//! Service Registration. Registers Services for Health Check.
+//! Service Registration Module
 //!
+//! This module provides the necessary traits and structures for registering and deregistering services
+//! It is a crucial part of the service lifecycle management, ensuring that services are properly
+//! cataloged and checked accordingly.
+//!
+//! The key components of this module are:
+//!
+//! - [`ServiceCheck`]: A trait that defines a stream of health check results for a service.
+//! - [`Registration`]: A trait that defines the registration process for a service, including health checks.
+//! - [`ServiceDeregistration`]: A trait that defines the deregistration process for a service.
+//! - [`ServiceRegistrationForm`]: A trait that defines the form used to register a service.
+//! - [`ServiceDeregistrationForm`]: A trait that defines the form used to deregister a service.
 
-use std::net::SocketAddr;
-use std::pin::Pin;
+use futures::future::BoxFuture;
 
-use derive_more::derive::{Deref, Display};
-use derive_more::Constructor;
-use futures::channel::oneshot;
-use futures::{Stream, StreamExt};
-
-/// A [`ServiceHeathCheckResult`] is returned by a completed health check.
-///
-#[derive(Debug, Constructor, Deref)]
-pub struct ServiceHeathCheckResult(Result<String, String>);
-
-/// The trait [`ServiceHealthCheck`] has a health check job with it's metadata
-///
-/// The `job` awaits a [`ServiceHeathCheckResult`].
-///
-pub trait ServiceHealthCheck: std::fmt::Debug + std::fmt::Display + Stream<Item = ServiceHeathCheckResult> + Send {
-    fn local_addr(&self) -> SocketAddr;
-    fn info(&self) -> String;
+/// A trait that defines a stream of health check results for a service.
+/// Implementations of this trait should provide meaningful debug and display output,
+/// and should be able to be sent across threads.
+pub trait ServiceCheck:
+    std::fmt::Debug + std::fmt::Display + futures::Stream<Item = Result<Self::Success, Self::Error>> + Send
+{
+    type Success;
+    type Error;
 }
 
-/// A [`Registration`] is catalogued.
-///
-/// Each registration includes a check that fulfils the [`ServiceHealthCheck`] specification.
-///
-#[derive(Debug, Display)]
-pub struct Registration {
-    check: Pin<Box<dyn ServiceHealthCheck>>,
+/// A trait that defines the registration process for a service, including health checks.
+/// Implementations of this trait should provide meaningful debug and display output.
+pub trait Registration: std::fmt::Debug + std::fmt::Display + Send + 'static {
+    type Success;
+    type Error;
+
+    /// Provides the health check for the service
+    #[allow(clippy::type_complexity)]
+    fn check(
+        &mut self,
+    ) -> Option<Box<dyn ServiceCheck<Success = Self::Success, Error = Self::Error, Item = Result<Self::Success, Self::Error>>>>;
 }
 
-impl Registration {
-    pub fn new<C>(check: C) -> Self
-    where
-        C: ServiceHealthCheck + 'static,
-    {
-        Self { check: Box::pin(check) }
-    }
-
-    #[must_use]
-    pub fn local_addr(&self) -> SocketAddr {
-        self.check.local_addr()
-    }
-
-    #[must_use]
-    pub async fn spawn_check(&mut self) -> Option<ServiceHeathCheckResult> {
-        self.check.next().await
-    }
+/// A trait that defines the deregistration process for a service.
+/// Implementations of this trait should provide meaningful debug and display output.
+pub trait ServiceDeregistration: std::fmt::Debug {
+    type Key;
 }
 
-/// A [`ServiceRegistrationForm`] will return a completed [`Registration`].
-///
-#[derive(Constructor)]
-pub struct ServiceRegistrationForm(oneshot::Sender<Registration>);
+/// A trait that defines the form used to register a service.
+/// This trait is generic over the deregistration type `D`.
+pub trait ServiceRegistrationForm<'b, CheckSuccess, CheckError> {
+    type DeReg;
 
-impl ServiceRegistrationForm {
-    pub(crate) fn send(self, registration: Registration) -> Result<(), Registration> {
-        self.0.send(registration)
-    }
+    /// The error if unable to register.
+    type Error: std::error::Error;
+
+    /// Registers the service using the provided registration.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the registration fails.
+    #[allow(clippy::type_complexity)]
+    fn register(
+        self,
+        registration: Box<dyn Registration<Success = CheckSuccess, Error = CheckError>>,
+    ) -> Result<BoxFuture<'b, Result<Option<Self::DeReg>, Self::Error>>, Self::Error>;
 }
 
-/// A [`ServiceDeregistrationForm`] will return [`SocketAddr`] for deregistration.
-///
-#[derive(Constructor)]
-pub struct ServiceDeregistrationForm(oneshot::Sender<SocketAddr>);
+/// A trait that defines the form used to deregister a service.
+/// This trait is generic over the deregistration type `D`.
+pub trait ServiceDeregistrationForm<'b, DeReg> {
+    type DeReg: ServiceDeregistration;
+    /// The error if unable to deregister.
+    type Error: std::error::Error;
 
-impl ServiceDeregistrationForm {
-    pub(crate) fn send(self, registration_id: SocketAddr) -> Result<(), SocketAddr> {
-        self.0.send(registration_id)
-    }
+    /// Deregisters the service using the provided deregistration.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the deregistration fails.
+    #[allow(clippy::type_complexity)]
+    fn deregister(
+        self,
+        deregistration: DeReg,
+    ) -> Result<BoxFuture<'b, Result<(), Box<dyn std::error::Error + Send>>>, Self::Error>;
 }

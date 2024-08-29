@@ -30,6 +30,15 @@ rust-version = "1.72"
 version = "3.0.0-beta-develop"
 
 [dependencies]
+torrust-tracker-clock = { version = "3.0.0-beta-develop", path = "packages/clock" }
+torrust-tracker-configuration = { version = "3.0.0-beta-develop", path = "packages/configuration" }
+torrust-tracker-contrib-bencode = { version = "3.0.0-beta-develop", path = "contrib/bencode" }
+torrust-tracker-located-error = { version = "3.0.0-beta-develop", path = "packages/located-error" }
+torrust-tracker-primitives = { version = "3.0.0-beta-develop", path = "packages/primitives" }
+torrust-tracker-registry = { version = "3.0.0-beta-develop", path = "packages/registry" }
+torrust-tracker-services = { version = "3.0.0-beta-develop", path = "packages/services" }
+torrust-tracker-torrent-repository = { version = "3.0.0-beta-develop", path = "packages/torrent-repository" }
+
 anyhow = "1"
 aquatic_udp_protocol = "0"
 axum = { version = "0", features = ["macros"] }
@@ -69,13 +78,6 @@ serde_repr = "0"
 serde_with = { version = "3", features = ["json"] }
 thiserror = "1"
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal", "sync"] }
-torrust-tracker-clock = { version = "3.0.0-beta-develop", path = "packages/clock" }
-torrust-tracker-configuration = { version = "3.0.0-beta-develop", path = "packages/configuration" }
-torrust-tracker-contrib-bencode = { version = "3.0.0-beta-develop", path = "contrib/bencode" }
-torrust-tracker-located-error = { version = "3.0.0-beta-develop", path = "packages/located-error" }
-torrust-tracker-primitives = { version = "3.0.0-beta-develop", path = "packages/primitives" }
-torrust-tracker-services = { version = "3.0.0-beta-develop", path = "packages/services" }
-torrust-tracker-torrent-repository = { version = "3.0.0-beta-develop", path = "packages/torrent-repository" }
 tower = { version = "0", features = ["timeout"] }
 tower-http = { version = "0", features = ["compression-full", "cors", "propagate-header", "request-id", "trace"] }
 trace = "0"
@@ -99,6 +101,7 @@ members = [
     "packages/configuration",
     "packages/located-error",
     "packages/primitives",
+    "packages/registry",
     "packages/services",
     "packages/test-helpers",
     "packages/torrent-repository",
