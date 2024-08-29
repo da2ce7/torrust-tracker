@@ -2,11 +2,12 @@ use std::collections::VecDeque;
 
 use axum::extract::State;
 use axum::Json;
+use torrust_tracker_services::{Registration, ServiceCheck};
 use tracing::{instrument, Level};
 
 use super::resources::{CheckReport, Report};
 use super::responses;
-use crate::servers::registar::{ServiceHealthCheckJob, ServiceRegistration, ServiceRegistry};
+use crate::registry::registar::ServiceRegistry;
 
 /// Endpoint for container health check.
 ///
@@ -15,12 +16,12 @@ use crate::servers::registar::{ServiceHealthCheckJob, ServiceRegistration, Servi
 #[instrument(skip(register), ret(level = Level::DEBUG))]
 pub(crate) async fn health_check_handler(State(register): State<ServiceRegistry>) -> Json<Report> {
     #[allow(unused_assignments)]
-    let mut checks: VecDeque<ServiceHealthCheckJob> = VecDeque::new();
+    let mut checks: VecDeque<ServiceCheck> = VecDeque::new();
 
     {
         let mutex = register.lock();
 
-        checks = mutex.await.values().map(ServiceRegistration::spawn_check).collect();
+        checks = mutex.await.values().map(Registration::spawn_check).collect();
     }
 
     // if we do not have any checks, lets return a `none` result.

@@ -35,6 +35,7 @@ use futures::future::BoxFuture;
 use thiserror::Error;
 use tokio::sync::oneshot;
 use torrust_tracker_configuration::AccessTokens;
+use torrust_tracker_services::ServiceRegistrationForm;
 use tracing::{instrument, Level};
 
 use super::routes::router;
@@ -43,7 +44,6 @@ use crate::core::Tracker;
 use crate::servers::apis::API_LOG_TARGET;
 use crate::servers::custom_axum_server::{self, TimeoutAcceptor};
 use crate::servers::logging::STARTED_ON;
-use crate::servers::registar::{ServiceHealthCheckJob, ServiceRegistration, ServiceRegistrationForm};
 use crate::servers::signals::{graceful_shutdown, Halted};
 
 /// Errors that can occur when starting or stopping the API server.
@@ -299,8 +299,8 @@ mod tests {
 
     use crate::bootstrap::app::initialize_with_configuration;
     use crate::bootstrap::jobs::make_rust_tls;
+    use crate::registry::registar::Registar;
     use crate::servers::apis::server::{ApiServer, Launcher};
-    use crate::servers::registar::Registar;
 
     #[tokio::test]
     async fn it_should_be_able_to_start_and_stop() {

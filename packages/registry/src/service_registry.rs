@@ -1,4 +1,3 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Weak};
 
 use torrust_tracker_services::ServiceCheck;
@@ -7,8 +6,10 @@ pub type Checker<CheckSuccess, CheckError> =
     Box<dyn ServiceCheck<Success = CheckSuccess, Error = CheckError, Item = Result<CheckSuccess, CheckError>>>;
 
 /// The [`ServiceRegistry`] provides a database...
-pub trait ServiceRegistry<CheckSuccess, CheckError>: std::fmt::Debug + Clone {
+pub trait ServiceRegistry: std::fmt::Debug + Clone {
     type Key;
+    type CheckSuccess;
+    type CheckError;
 
     /// Returns a new arc of itself, if receiving new requests, when this arc is unwrapped it signals that the registry is no longer active.
     fn new() -> Arc<Self>;
@@ -21,10 +22,11 @@ pub trait ServiceRegistry<CheckSuccess, CheckError>: std::fmt::Debug + Clone {
     /// # Errors
     ///
     /// This function will return an error if the registration fails.
+    #[allow(clippy::type_complexity)]
     fn register(
         self: Arc<Self>,
-        value: Checker<CheckSuccess, CheckError>,
-    ) -> Result<Option<Self::Key>, Checker<CheckSuccess, CheckError>>;
+        value: Checker<Self::CheckSuccess, Self::CheckError>,
+    ) -> Result<Option<Self::Key>, Checker<Self::CheckSuccess, Self::CheckError>>;
 
     /// Deregisters a service check.
     ///
@@ -32,23 +34,4 @@ pub trait ServiceRegistry<CheckSuccess, CheckError>: std::fmt::Debug + Clone {
     ///
     /// This function will return an error if the deregistration fails.
     fn deregister(self: Arc<Self>, key: Self::Key) -> Result<(), Self::Key>;
-}
-
-pub trait GenNextKey {
-    type Key;
-
-    fn next_id(&self) -> Option<Self::Key>;
-}
-
-#[derive(Default)]
-struct IdGenerator {
-    counter: AtomicUsize,
-}
-
-impl GenNextKey for IdGenerator {
-    type Key = usize;
-
-    fn next_id(&self) -> Option<Self::Key> {
-        Some(self.counter.fetch_add(1, Ordering::SeqCst))
-    }
 }

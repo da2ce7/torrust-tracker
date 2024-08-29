@@ -1,4 +1,3 @@
-use std::marker::PhantomData;
 use std::sync::Arc;
 
 use derive_more::derive::{Constructor, Display};
@@ -26,38 +25,27 @@ pub enum Error<K> {
 }
 
 #[derive(Debug)]
-pub struct Form<Registry, CheckSuccess, CheckError> {
+pub struct Form<Registry> {
     registry: Arc<Registry>,
-    _check_success: PhantomData<CheckSuccess>,
-    _check_error: PhantomData<CheckError>,
 }
 
-impl<Registry, CheckSuccess, CheckError> Form<Registry, CheckSuccess, CheckError> {
+impl<Registry> Form<Registry> {
     pub fn new(registry: Arc<Registry>) -> Self {
-        Self {
-            registry,
-            _check_success: PhantomData,
-            _check_error: PhantomData,
-        }
+        Self { registry }
     }
 }
 
-impl<'b, Registry, CheckSuccess, CheckError>
-    ServiceDeregistrationForm<'b, Deregistration<<Registry as ServiceRegistry<CheckSuccess, CheckError>>::Key>>
-    for Form<Registry, CheckSuccess, CheckError>
+impl<'b, Registry> ServiceDeregistrationForm<'b, Deregistration<<Registry as ServiceRegistry>::Key>> for Form<Registry>
 where
-    Registry: ServiceRegistry<CheckSuccess, CheckError>,
-    <Registry as ServiceRegistry<CheckSuccess, CheckError>>::Key: std::fmt::Debug + std::fmt::Display,
-
-    CheckSuccess: 'b,
-    CheckError: 'b,
+    Registry: ServiceRegistry,
+    <Registry as ServiceRegistry>::Key: std::fmt::Debug + std::fmt::Display,
 {
-    type DeReg = Deregistration<<Registry as ServiceRegistry<CheckSuccess, CheckError>>::Key>;
-    type Error = Error<<Registry as ServiceRegistry<CheckSuccess, CheckError>>::Key>;
+    type DeReg = Deregistration<<Registry as ServiceRegistry>::Key>;
+    type Error = Error<<Registry as ServiceRegistry>::Key>;
 
     fn deregister(
         self,
-        deregistration: Deregistration<<Registry as ServiceRegistry<CheckSuccess, CheckError>>::Key>,
+        deregistration: Deregistration<<Registry as ServiceRegistry>::Key>,
     ) -> Result<BoxFuture<'b, Result<(), Box<dyn std::error::Error + Send>>>, Self::Error> {
         let key = deregistration.0;
 

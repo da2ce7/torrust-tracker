@@ -13,8 +13,8 @@ use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 use tracing::{Level, Span};
 
 use super::handlers::health_check_handler;
+use crate::registry::registar::ServiceRegistry;
 use crate::servers::health_check_api::HEALTH_CHECK_API_LOG_TARGET;
-use crate::servers::registar::ServiceRegistry;
 
 pub fn router(register: ServiceRegistry) -> Router {
     Router::new()

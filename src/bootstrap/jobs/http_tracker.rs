@@ -87,8 +87,8 @@ mod tests {
 
     use crate::bootstrap::app::initialize_with_configuration;
     use crate::bootstrap::jobs::http_tracker::start_job;
+    use crate::registry::registar::Registar;
     use crate::servers::http::Version;
-    use crate::servers::registar::Registar;
 
     #[tokio::test]
     async fn it_should_start_http_tracker() {

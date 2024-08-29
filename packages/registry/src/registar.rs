@@ -19,12 +19,12 @@ pub struct Registar<Registry> {
     registry: Registry,
 }
 
-impl<Registry> Registar<Registry> {
+impl<Registry> Registar<Registry>
+where
+    Registry: ServiceRegistry,
+{
     #[must_use]
-    pub fn new<CheckSuccess, CheckError>() -> (Self, Arc<Registry>)
-    where
-        Registry: ServiceRegistry<CheckSuccess, CheckError>,
-    {
+    pub fn new() -> (Self, Arc<Registry>) {
         let registry = Registry::new();
         (
             Self {
@@ -39,12 +39,7 @@ impl<Registry> Registar<Registry> {
     /// # Errors
     ///
     /// This function will return an error if it fails to get a new registry reference.
-    pub fn give_register_form<CheckSuccess, CheckError>(
-        &self,
-    ) -> Result<registration::Form<Registry, CheckSuccess, CheckError>, Error>
-    where
-        Registry: ServiceRegistry<CheckSuccess, CheckError>,
-    {
+    pub fn give_register_form(&self) -> Result<registration::Form<Registry>, Error> {
         let Some(registry) = self.registry.me().upgrade() else {
             return Err(Error::FailedToGetRegister);
         };
@@ -56,12 +51,7 @@ impl<Registry> Registar<Registry> {
     /// # Errors
     ///
     /// This function will return an error if it fails to get a new registry reference.
-    pub fn give_deregister_form<CheckSuccess, CheckError>(
-        &self,
-    ) -> Result<deregistration::Form<Registry, CheckSuccess, CheckError>, Error>
-    where
-        Registry: ServiceRegistry<CheckSuccess, CheckError>,
-    {
+    pub fn give_deregister_form(&self) -> Result<deregistration::Form<Registry>, Error> {
         let Some(registry) = self.registry.me().upgrade() else {
             return Err(Error::FailedToGetRegister);
         };

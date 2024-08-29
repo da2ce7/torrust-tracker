@@ -6,8 +6,7 @@ use futures::future::BoxFuture;
 use futures::{FutureExt, Stream, StreamExt as _};
 use tokio::task::JoinSet;
 use tokio::time::sleep;
-use torrust_tracker_services::registration::Registration;
-use torrust_tracker_services::service::Service;
+use torrust_tracker_services::{Registration, Service};
 
 use super::error::Error;
 use super::launcher::{Launcher, ProtocolTls};
@@ -28,7 +27,7 @@ impl Service for Server {
         Ok(Server { launcher, running: None })
     }
 
-    fn start<'a>(mut self) -> Result<BoxFuture<'a, Result<(Self, Registration), Self::Error>>, Self::Error> {
+    fn start<'a, R>(self) -> Result<BoxFuture<'a, Result<(Self, R), Self::Error>>, Self::Error> {
         let started = self.launcher.start()?;
 
         // important!
@@ -166,8 +165,8 @@ mod tests {
 
     use crate::bootstrap::app::initialize_with_configuration;
     use crate::bootstrap::jobs::make_rust_tls;
+    use crate::registry::registar::Registar;
     use crate::servers::http::server::{Launcher, Server};
-    use crate::servers::registar::Registar;
 
     #[tokio::test]
     async fn it_should_be_able_to_start_and_stop() {

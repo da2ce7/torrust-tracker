@@ -13,10 +13,12 @@
 //! > code.
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use derive_more::derive::Display;
 use serde::Serialize;
+use thiserror::Error;
 
 /// `Error` response for the [`HTTP tracker`](crate::servers::http).
-#[derive(Serialize, Debug, PartialEq)]
+#[derive(Error, Display, Serialize, Debug, PartialEq)]
 pub struct Error {
     /// Human readable string which explains why the request failed.
     #[serde(rename = "failure reason")]

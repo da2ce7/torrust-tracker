@@ -1,4 +1,3 @@
-use std::marker::PhantomData;
 use std::sync::Arc;
 
 use futures::future::BoxFuture;
@@ -18,36 +17,36 @@ pub enum Error<CheckSuccess, CheckError> {
 }
 
 #[derive(Debug)]
-pub struct Form<Registry, CheckSuccess, CheckError> {
+pub struct Form<Registry> {
     registry: Arc<Registry>,
-    _check_success: PhantomData<CheckSuccess>,
-    _check_error: PhantomData<CheckError>,
 }
 
-impl<Registry, CheckSuccess, CheckError> Form<Registry, CheckSuccess, CheckError> {
+impl<Registry> Form<Registry> {
     pub(crate) fn new(registry: Arc<Registry>) -> Self {
-        Self {
-            registry,
-            _check_success: PhantomData,
-            _check_error: PhantomData,
-        }
+        Self { registry }
     }
 }
 
-impl<'b, Registry, CheckSuccess, CheckError> ServiceRegistrationForm<'b, CheckSuccess, CheckError>
-    for Form<Registry, CheckSuccess, CheckError>
+impl<'b, Registry>
+    ServiceRegistrationForm<'b, <Registry as ServiceRegistry>::CheckSuccess, <Registry as ServiceRegistry>::CheckError>
+    for Form<Registry>
 where
-    Registry: ServiceRegistry<CheckSuccess, CheckError>,
-    <Registry as ServiceRegistry<CheckSuccess, CheckError>>::Key: std::fmt::Debug + Send + 'b,
-    CheckSuccess: std::fmt::Debug + std::fmt::Display + 'static,
-    CheckError: std::fmt::Debug + std::fmt::Display + 'static,
+    Registry: ServiceRegistry,
+    <Registry as ServiceRegistry>::Key: std::fmt::Debug + Send + 'b,
+    <Registry as ServiceRegistry>::CheckSuccess: std::fmt::Debug + 'static,
+    <Registry as ServiceRegistry>::CheckError: std::error::Error + 'static,
 {
-    type DeReg = Deregistration<<Registry as ServiceRegistry<CheckSuccess, CheckError>>::Key>;
-    type Error = Error<CheckSuccess, CheckError>;
+    type DeReg = Deregistration<<Registry as ServiceRegistry>::Key>;
+    type Error = Error<<Registry as ServiceRegistry>::CheckSuccess, <Registry as ServiceRegistry>::CheckError>;
 
     fn register(
         self,
-        mut registration: Box<dyn Registration<Success = CheckSuccess, Error = CheckError>>,
+        mut registration: Box<
+            dyn Registration<
+                Success = <Registry as ServiceRegistry>::CheckSuccess,
+                Error = <Registry as ServiceRegistry>::CheckError,
+            >,
+        >,
     ) -> Result<BoxFuture<'b, Result<Option<Self::DeReg>, Self::Error>>, Self::Error> {
         let Some(check) = registration.check() else {
             return Err(Error::FailedToGetCheck(registration));
@@ -56,7 +55,7 @@ where
         let maybe_de_reg = self
             .registry
             .register(check)
-            .map_err(|e| Error::FailedToRegister(e))?
+            .map_err(Error::FailedToRegister)?
             .map(Deregistration::new);
 
         Ok(std::future::ready(Ok(maybe_de_reg)).boxed())

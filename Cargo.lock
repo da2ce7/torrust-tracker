@@ -3970,6 +3970,7 @@ dependencies = [
  "torrust-tracker-contrib-bencode",
  "torrust-tracker-located-error",
  "torrust-tracker-primitives",
+ "torrust-tracker-registry",
  "torrust-tracker-services",
  "torrust-tracker-test-helpers",
  "torrust-tracker-torrent-repository",
@@ -4040,11 +4041,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "torrust-tracker-registry"
+version = "3.0.0-beta-develop"
+dependencies = [
+ "derive_more",
+ "futures",
+ "pin-project-lite",
+ "thiserror",
+ "tokio",
+ "torrust-tracker-services",
+ "tracing",
+]
+
+[[package]]
 name = "torrust-tracker-services"
 version = "3.0.0-beta-develop"
 dependencies = [
  "derive_more",
  "futures",
+ "pin-project",
+ "thiserror",
  "tracing",
 ]
 

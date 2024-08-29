@@ -7,6 +7,7 @@ use axum_server::Handle;
 use derive_more::derive::{Constructor, Display};
 use futures::TryFutureExt;
 use tokio::task::JoinSet;
+use torrust_tracker_services::Service;
 use tracing::instrument;
 
 use super::error::Error;
@@ -60,9 +61,9 @@ impl std::fmt::Display for Launcher {
 
 impl Launcher {
     #[instrument(skip(self))]
-    pub(super) fn start<S>(&self) -> Result<Running<S>, <S as torrust_tracker_services::service::Service>::Error>
+    pub(super) fn start<S>(&self) -> Result<Running<S>, <S as Service>::Error>
     where
-        S: torrust_tracker_services::service::Service<Error = Error>,
+        S: Service<Error = Error>,
     {
         let mut tasks = JoinSet::new();
         let handle = Handle::new();

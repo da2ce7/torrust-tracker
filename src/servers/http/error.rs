@@ -1,7 +1,6 @@
 use std::net::SocketAddr;
 
 use thiserror::Error;
-use torrust_tracker_services::registration::Registration;
 
 use crate::servers::signals::Halted;
 
@@ -23,8 +22,6 @@ pub enum Error {
     FailedToStart(std::io::Error),
     #[error("Failed to receive started message")]
     FailedToReceiveStartedMessage(tokio::sync::oneshot::error::RecvError),
-    #[error("Failed to register service")]
-    FailedToRegisterService(Registration),
     #[error("Failed to deregister service")]
     FailedToDeregisterService(SocketAddr),
     #[error("Tasks should not panic")]

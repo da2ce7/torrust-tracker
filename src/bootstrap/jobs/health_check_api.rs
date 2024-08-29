@@ -20,9 +20,9 @@ use torrust_tracker_configuration::HealthCheckApi;
 use tracing::instrument;
 
 use super::Started;
+use crate::registry::Registry;
 use crate::servers::health_check_api::{server, HEALTH_CHECK_API_LOG_TARGET};
 use crate::servers::logging::STARTED_ON;
-use crate::servers::registar::ServiceRegistry;
 use crate::servers::signals::Halted;
 
 /// This function starts a new Health Check API server with the provided
@@ -36,7 +36,7 @@ use crate::servers::signals::Halted;
 ///
 /// It would panic if unable to send the  `ApiServerJobStarted` notice.
 #[instrument(skip(config, register))]
-pub async fn run_job(config: HealthCheckApi, register: ServiceRegistry) {
+pub async fn run_job(config: HealthCheckApi, register: Registry) {
     let bind_addr = config.bind_address;
 
     let (tx_start, rx_start) = oneshot::channel::<Started>();
